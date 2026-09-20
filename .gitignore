@@ -1,0 +1,19 @@
+# node
+node_modules/
+dist/
+build/
+.cache/
+coverage/
+*.log
+.pnpm-store/
+
+# env
+.env
+.env.*
+!.env.example
+
+# shopify cli
+.shopify/
+
+# os
+.DS_Store
