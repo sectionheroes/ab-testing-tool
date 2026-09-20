@@ -1,6 +1,8 @@
-# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v3.6)
+# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v3.7)
 
 *Stand: 18.09.2026, v2 nach Joels Feedback. Baut auf dem Konzept-Doc auf (gleicher Ordner). UI-Design nach `DESIGN.md` (gleicher Ordner – ins Repo kopieren). Ziel: Das MVP so in Arbeitspakete schneiden, dass Claude Code jedes Paket in ein bis drei Sessions umsetzen kann, mit klaren Abnahmekriterien, und dass die Basis für Preis-/Versandtests (Phase 3) schon drin ist.*
+
+**v3.7 (20.09., WP0):** Abgleich mit `rahmen.md`: Retention bestätigt (`WebhookEvent.payload` nur bei Fehler, Zeile 30 Tage, `Exposure` 12 Monate, `Order.raw` schlanke Whitelist) · `ExperimentResult`-Snapshot und `Experiment.taintedDays` in §3, Berechnung WP4, Persistenz/UI WP5 · `/jobs/cleanup` in WP6 · 8.3 (de-DE) und 8.4 (A) entschieden · Slack bleibt neben Dashboard-Badges · WP-R-Checkliste aus der Doku-Verifikation (ADR-0099) · ADR-0001–0027 angelegt. **Aus der Verifikation offen:** `_shopify_y` wird seit 01.01.2026 nicht mehr gesetzt und App-Proxy-Responses verlieren `Set-Cookie` – 8.5 muss neu entschieden werden (Joel), §1 und 4.4 sind bewusst unverändert.
 
 **v3.6 (20.09.):** App geht durch den Shopify App Review (Public Apps sind sonst nur auf Dev Stores installierbar). Folgen: Install offen + Freischaltung (Allowlist oder Aktivierungscode) statt Install-Gate · hybrid: embedded Merchant-Seite `/app` (App Bridge) + non-embedded Agentur-Dashboard · neues WP-R Review-Submission nach WP3 · Listing-Assets in §7 · Fallback = Custom-Distribution-App pro Kunde.
 
@@ -56,6 +58,12 @@
 | Live-Daten | Zähler (Visitors, Orders, Revenue, SRM) live per Query, Auto-Refresh 60 s. `DailyStat` nur für Historie und Charts. | Joels Anforderung. Live-Zahlen sind für QA und Notbremse; das Urteil (p-Wert, Winner) bleibt hinter der Sample Size. |
 | Sprache | TypeScript überall (Backend, Stats, Snippet, CLI). DESIGN.md sagt "kein TS nötig" – für dieses Tool trotzdem TS, weil Stats und Snippet Typen brauchen. UI-Komponenten dürfen `.tsx` sein. | Ein Stack |
 | Tests | Vitest | Standard |
+| Zahlenformat | UI-Text Englisch, Zahlen, Beträge und Daten `de-DE` (`1.234,56 €`, `20.09.2026`) über `Intl` (8.3, ADR-0022) | Kunden und Beträge sind deutsch; nur `Intl`-Aufrufe betroffen, später umschaltbar. |
+| Connection Pooling | Option A: kein Pooler, `connection_limit=10&pool_timeout=5` in der Prisma-URL, eine Render-Starter-Instanz (8.4, ADR-0023) | Eine Instanz → max. 10 Verbindungen. PgBouncer (B) erst bei > 1 Instanz, ist nur eine Env-Var. |
+| Retention | `WebhookEvent.payload` nur bei Fehler; `WebhookEvent`-Zeilen nach 30 Tagen, `Exposure` nach 12 Monaten gelöscht (`/jobs/cleanup`, WP6); `Order.raw` schlanke Whitelist; Orders/Refunds/DailyStat/AuditLog/`ExperimentResult` dauerhaft (`rahmen.md` §3, ADR-0024) | Speicher ist der einzige wachsende Posten; Rohdaten mit Personenbezug brauchen eine Frist. |
+| Ergebnis-Snapshot | `ExperimentResult` (§3): versioniertes JSON, einmal beim Übergang auf `ENDED` eingefroren, nie neu berechnet; Report für beendete Experimente liest nur den Snapshot (ADR-0025) | Ergebnisse müssen ≥ 2 Jahre abrufbar sein, Rohdaten nicht – und ein alter Report darf sich nach Änderungen an der Stats-Engine nicht ändern. |
+| Tainted Days | `Experiment.taintedDays` manuell im Dashboard (WP5), aus dem Auswertungsfenster ausgeschlossen (WP4), im Report und Snapshot sichtbar; automatische Erkennung Phase 2 (ADR-0026) | Regel aus `rahmen.md` 7.2 ohne Detektor-Infrastruktur umsetzbar. |
+| Alerts | Dashboard-Badges (SRM, keine Exposures 24 h, Reconciliation-Diff, Snippet-Fehler) **und** Slack-Webhook bei `MISMATCH` + täglicher Digest (WP6, ADR-0027) | Badges dort, wo man hinschaut; Slack, weil niemand täglich das Dashboard öffnet. |
 
 ---
 
@@ -149,9 +157,28 @@ model Experiment {
   endedAt           DateTime?
   decision          Decision?                 // WINNER | NO_DIFFERENCE | INVALID | ABORTED – Pflicht beim Stop
   conclusion        String?                   // das Learning in zwei Sätzen; Phase-2-Learnings-DB liest genau das
+  taintedDays       Json     @default("[]")   // ["2026-10-03", …] – manuell im Dashboard (WP5); stats.server schließt diese Tage aus dem Auswertungsfenster aus (WP4); Phase 2: automatisch (rahmen 7.2)
   variants          Variant[]
   auditLog          AuditLog[]
+  result            ExperimentResult?
   @@unique([shopId, key])
+}
+
+model ExperimentResult {                    // eingefrorener Ergebnis-Snapshot – rahmen.md §3.2; einmal beim Übergang auf ENDED, danach nur gelesen, nie neu berechnet
+  id            String   @id @default(cuid())
+  experimentId  String   @unique
+  shopId        String
+  v             Int                       // Schema-Version des Snapshots, startet bei 1
+  statsVersion  String                    // Version von lib/stats, mit der gerechnet wurde
+  frozenAt      DateTime
+  snapshot      Json                      // evaluate()-Output (WP4) + eingefrorener Kontext, ohne Personenbezug:
+                                          //  numbers: je Variante n, conversions, orders, revenue, cr, rpv, aov, lift, ci, pValue – gesamt und je Device (mobile/desktop/tablet);
+                                          //           srm { pValue, observed, expected }; window { from, to }; taintedDays; sampleSizeReached; botShare
+                                          //  frozen:  hypothesis, primaryMetric, plannedSampleSize, variants[{ key, name, weight, isControl, js, css }],
+                                          //           targeting, allocation, salt, trigger, hideUntilApplied, startedAt, endedAt,
+                                          //           codeChanges[{ at, actor, variantKey }] (aus AuditLog CODE_CHANGED_WHILE_RUNNING)
+                                          //  verdict: decision, conclusion
+                                          //  Phase 2: screenshot je Variante (§9)
 }
 
 model Variant {
@@ -177,7 +204,7 @@ model AuditLog {                          // wer hat wann was geändert – wich
   at            DateTime
 }
 
-model Exposure {
+model Exposure {                          // Retention: 12 Monate, dann löscht /jobs/cleanup (WP6) – der Snapshot (ExperimentResult) hat die Zahlen
   id            String   @id @default(cuid())
   shopId        String
   experimentId  String
@@ -211,7 +238,7 @@ model Order {
   customerId      String?
   sourceName      String                  // web | shop_app | pos | shopify_draft_order … – Zählregel 4.8
   isTest          Boolean  @default(false) // order.test – zählt nie
-  raw             Json                    // PII-gestrippt via stripPii() (WP2) – nie der rohe Webhook
+  raw             Json                    // schlanke Whitelist via slimOrder() (WP2), nie der volle Payload: note_attributes, line_items (id, variant_id, product_id, quantity, price, properties), shipping_lines, alle *_price_set.shop_money, financial_status, cancelled_at, customer.id – ~4 KB statt ~30 KB (rahmen 3.1)
   lineItems       OrderLineItem[]
   attributions    OrderAttribution[]
   refunds         Refund[]
@@ -244,7 +271,7 @@ model Refund {
   createdAt       DateTime
 }
 
-model WebhookEvent {                      // Idempotenz + Debugging
+model WebhookEvent {                      // Idempotenz + Debugging; Zeilen älter als 30 Tage löscht /jobs/cleanup (WP6) – Shopifys Retry-Fenster ist kürzer
   id          String   @id @default(cuid())
   shopId      String
   topic       String
@@ -253,7 +280,7 @@ model WebhookEvent {                      // Idempotenz + Debugging
   processedAt DateTime?
   error       String?
   attempts    Int      @default(0)         // Retry-Zähler für /jobs/retry-webhooks
-  payload     Json                        // PII-gestrippt, dieselbe stripPii()
+  payload     Json?                       // nur bei Fehler befüllt (Retry braucht den Body), PII-gestrippt via stripPii(); erfolgreiche Events: null
   @@unique([shopifyId])
 }
 
@@ -471,25 +498,27 @@ Siehe Checkliste in §7. Claude Code parallel: Repo initialisieren, `CLAUDE.md` 
 **Inhalt**
 - Vollständiges Prisma-Schema aus §3, Migrationen
 - Idempotenz: `X-Shopify-Webhook-Id` unique, Doppel-Delivery wird still verworfen
-- `stripPii(payload)`: entfernt `customer` (bis auf `id`), `billing_address`, `shipping_address`, `email`, `contact_email`, `phone`, `note`, `client_details`, `payment_details`, `browser_ip`. Wird **vor** jedem Speichern von `WebhookEvent.payload` und `Order.raw` angewendet. Test läuft über alle Fixtures und schlägt an, sobald eine bekannte PII-Property durchrutscht.
-- Verarbeitungsmuster (es gibt keine Queue): Handler schreibt `WebhookEvent`, antwortet 200, verarbeitet inline. Wirft die Verarbeitung, landet der Fehler in `WebhookEvent.error`, `attempts++`; `POST /jobs/retry-webhooks` (Render Cron Job, stündlich) verarbeitet Events mit `error` und `attempts < 5` erneut. Handler bleiben unter 2 s – für Order-Parsing trivial.
+- `stripPii(payload)`: entfernt `customer` (bis auf `id`), `billing_address`, `shipping_address`, `email`, `contact_email`, `phone`, `note`, `client_details`, `payment_details`, `browser_ip`. Wird **vor** jedem Speichern eines Payloads angewendet. Test läuft über alle Fixtures und schlägt an, sobald eine bekannte PII-Property durchrutscht.
+- `slimOrder(payload)`: Whitelist für `Order.raw` (§3, `rahmen.md` 3.1) – `note_attributes`, `line_items` (id, variant_id, product_id, quantity, price, properties), `shipping_lines`, alle `*_price_set.shop_money`, `financial_status`, `cancelled_at`, `customer.id`. Läuft nach `stripPii()`. Test: Ergebnis enthält keine Property außerhalb der Whitelist.
+- Verarbeitungsmuster (es gibt keine Queue): Handler schreibt `WebhookEvent` (ohne `payload`), antwortet 200, verarbeitet inline. Wirft die Verarbeitung, landet der Fehler in `WebhookEvent.error`, `attempts++` und der PII-gestrippte Body in `WebhookEvent.payload` (nur dann); `POST /jobs/retry-webhooks` (Render Cron Job, stündlich) verarbeitet Events mit `error` und `attempts < 5` erneut und leert `payload` bei Erfolg. Handler bleiben unter 2 s – für Order-Parsing trivial.
 - `orders/create`: Order (`sourceName`, `isTest`), LineItems, Attribution (Vertrag 4.1 inkl. `CUSTOMER_LOOKUP`), Beträge aus `*_price_set.shop_money`
 - `orders/updated`: `financialStatus`, `cancelledAt` **und** alle Beträge neu – Order-Edits ändern Totals
 - `refunds/create`: Refund mit `shop_money`-Summe der `transactions`
-- `customers/redact`: `customerId` in Exposure/Order auf null – mehr gibt es dank `stripPii` nicht; `shop/redact`: nach §8.6
+- `customers/data_request`: alle `Exposure`- und `Order`-Rows mit dieser `customerId` als JSON-Export in `WebhookEvent.payload` ablegen und im Slack-Digest melden – der Store Owner bekommt die Daten manuell von uns (Frist 30 Tage, ADR-0099 h); `customers/redact`: `customerId` in Exposure/Order auf null – mehr gibt es dank `stripPii` nicht; `shop/redact`: nach §8.6. Alle drei antworten sofort 200.
 - Fixtures: echte Payloads vom Dev Store (Normalbestellung, Buy-Now-Bestellung, Bestellung ohne Attribut, Refund, Multi-Currency-Bestellung mit Presentment ≠ Shop-Währung)
 
 **Abnahme**
 - Unit-Tests gegen alle Fixtures grün
-- Keine PII-Property aus den Fixtures findet sich in `WebhookEvent.payload` oder `Order.raw`
-- Handler mit provoziertem Fehler → `WebhookEvent.error` gesetzt, Retry-Job verarbeitet nach Fix erfolgreich
+- Keine PII-Property aus den Fixtures findet sich in `WebhookEvent.payload` oder `Order.raw`; `Order.raw` enthält nur Whitelist-Felder und ist < 5 KB für die Normalbestellung
+- Erfolgreich verarbeiteter Webhook hat `WebhookEvent.payload = null`
+- Handler mit provoziertem Fehler → `WebhookEvent.error` und `payload` gesetzt, Retry-Job verarbeitet nach Fix erfolgreich und leert `payload`
 - Dev Store: Bestellung mit manuell gesetztem Cart Attribute (`/cart/update.js` in der Browser-Konsole) → korrekt in `OrderAttribution` mit `source = CART_ATTRIBUTE`
 - Dev Store: Buy-Now mit Line Item Property → `source = LINE_ITEM_PROPERTY`
 - Multi-Currency-Fixture: `totalPrice` ist der Shop-Währungs-Betrag, nicht Presentment
 - Refund reduziert nichts in `Order`, sondern liegt als eigene Row vor (Netto wird bei Aggregation berechnet)
 
 **Session-Prompt (EN)**
-> Read CLAUDE.md, docs/plan.md sections 3, 4.1 and WP2. Implement the full Prisma schema and migrations, then the webhook handlers for orders/create, orders/updated, refunds/create and the three compliance topics. Attribution parsing must follow contract 4.1 exactly. Always read money from `*_price_set.shop_money.amount`, never from `total_price`. Capture real webhook payloads from the dev store into test/fixtures/webhooks and write Vitest tests against them, including one multi-currency order. Handlers must be idempotent on X-Shopify-Webhook-Id, persist the event first, process inline, and record failures for /jobs/retry-webhooks. Every stored payload goes through a tested stripPii() – we never persist names, emails or addresses. orders/updated refreshes all money fields.
+> Read CLAUDE.md, docs/plan.md sections 3, 4.1 and WP2. Implement the full Prisma schema and migrations, then the webhook handlers for orders/create, orders/updated, refunds/create and the three compliance topics. Attribution parsing must follow contract 4.1 exactly. Always read money from `*_price_set.shop_money.amount`, never from `total_price`. Capture real webhook payloads from the dev store into test/fixtures/webhooks and write Vitest tests against them, including one multi-currency order. Handlers must be idempotent on X-Shopify-Webhook-Id, persist the event first, process inline, and record failures for /jobs/retry-webhooks. Every stored payload goes through a tested stripPii() – we never persist names, emails or addresses. WebhookEvent.payload is only stored when processing fails (and cleared once the retry succeeds); Order.raw is the slim whitelist from section 3 built by slimOrder(), never the full payload. orders/updated refreshes all money fields.
 
 ### WP3 – Metafield-Config, Theme App Extension, Snippet (4–5 Tage – der größte Brocken)
 
@@ -543,6 +572,24 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
 - App-Status "Approved" im Partner Dashboard, PCD gewährt
 - Install-Link funktioniert auf einem Nicht-Dev-Store (unser eigener Test-Shop, nicht der Kunde)
 
+**Checkliste aus WP0 (g) – Stand der Shopify-Doku 20.09.2026, Quellen in ADR-0099**
+
+*Vor dem Einreichen nochmal gegen `shopify.dev/docs/apps/launch/shopify-app-store/app-store-requirements` prüfen – die Liste ändert sich.*
+
+- [ ] **Embedded:** App-Bridge-Script (`app-bridge.js` von der Shopify-CDN) als erstes Script im `<head>` jeder Seite unter `/app/*`; ID-Token-Auth (Session Tokens), keine Third-Party-Cookies, funktioniert in Chrome Inkognito (Req. 1.1.1, 2.2.3). Der Reviewer sieht nur `/app`.
+- [ ] **Off-Platform:** Req. 2.2.2 verlangt, dass "off-platform features" im Admin integriert sind; "Pass app review" nennt "switches between embedded and not embedded versions" als Ablehnungsgrund. Unser Agentur-Dashboard `/dashboard` ist kein Merchant-Feature: nirgends aus `/app` verlinkt, im Listing nicht als Merchant-Funktion beschrieben, Login nur für Sectionheroes-Accounts. Die Merchant-Seite `/app` zeigt Status, App-Embed-Deep-Link und Kontakt – das ist die komplette Merchant-Funktionalität. Risiko bleibt "unclear" (ADR-0099 c/g); Fallback: Custom-Distribution-App (§1).
+- [ ] **Install-Flow:** OAuth sofort nach Install, keine UI vor OAuth, Redirect nach OAuth direkt auf `/app` (Req. 2.3.2, 2.3.3); Reinstall läuft wieder durch OAuth (2.3.4); nie eine manuelle Eingabe der myshopify-Domain (2.3.1). Aktivierungscode erst **nach** OAuth auf `/app` – die Doku kennt für B2B-Apps ("require a more complex sign-up, which often involves a business-to-business contract") ausdrücklich die Ausnahme vom Self-Service-Onboarding (Built for Shopify 3.1.3); im Testhinweis für den Reviewer den Code mitliefern.
+- [ ] **GraphQL only:** neue Public Apps seit 01.04.2025 ausschließlich GraphQL Admin API (Req. 2.2.4) – kein REST-Call im Code, auch nicht in der Reconciliation.
+- [ ] **Theme App Extension:** Pflicht für Storefront-Integration; App Embed Block ist per Default deaktiviert, `/app` erklärt die Aktivierung und zeigt den Status per `app.extensions()` bzw. Deep-Link; kein App-Branding im Storefront (Standard-Attribution ≤ 24 px oder gar nichts), keine Review-Bitten.
+- [ ] **Performance:** App darf den Lighthouse-Performance-Score um höchstens 10 Punkte senken; Shopify misst gewichtet Home 17 % / PDP 40 % / Collection 43 %, vorher/nachher. Unser WP3-Ziel (≤ 2 Punkte auf der PDP) liegt weit darunter – vor Einreichung alle drei Seitentypen messen, mehrere Läufe mitteln.
+- [ ] **Compliance-Webhooks:** `customers/data_request`, `customers/redact`, `shop/redact` als `compliance_topics` in `shopify.app.toml`, HMAC-geprüft, antworten 200 (Pflicht für App-Store-Apps).
+- [ ] **PCD:** Antrag (Level 1, Begründung, Data-Protection-Details) **vor** dem Einreichen stellen – "Applying for protected customer data isn't possible while the app is under review."
+- [ ] **Konfiguration:** App-Icon 1200×1200 (JPEG/PNG); App-URLs und API-Contact-E-Mail ohne "Shopify" im Namen; Emergency Developer Contact (E-Mail + Telefon) im Partner-Account (Req. 4.5.6).
+- [ ] **Listing (limited visibility = unlisted):** Primärsprache; App-Name; Introduction (100 Zeichen, Nutzen statt Marketing); 3–6 Screenshots 1600×900 der Merchant-Seite `/app`, ohne Browser-Chrome, ohne PII, mit Alt-Text; Feature-Media optional; Privacy-Policy-URL; Support-E-Mail; Pricing "Free".
+- [ ] **Test-Anleitung (Req. 4.5.3–4.5.5):** Screencast (Englisch oder englische Untertitel) mit Install → Aktivierungscode → App Embed aktivieren → Test-Experiment sichtbar; Aktivierungscode und alle Zugangsdaten im Submission-Formular, aktuell gehalten; Demo-Store-URL (Dev Store).
+- [ ] **Keine Fehler:** keine 404/500/30x auf irgendeiner Route, die der Reviewer erreichen kann (Req. 2.1.1–2.1.3); `/dashboard` ohne Login zeigt eine saubere Login-Seite, keinen Fehler.
+- [ ] **Allgemein:** nur faktische Angaben im Listing (1.1.4); keine deprecated APIs (< 90 Tage); Install-Eligibility im Formular: Online Store erforderlich.
+
 ### WP4 – Stats-Engine + A/A-Simulation (2–3 Tage)
 
 **Inhalt**
@@ -552,7 +599,8 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
   - `srmCheck(observedCounts, expectedWeights)` → Chi-Square p-value; Alarm bei p < 0.001
   - `sampleSize({ metric: "CR", baselineCR, mde, alpha: 0.05, power: 0.8 })`; für RPV `sampleSize({ metric: "RPV", mean, sd, mde })` (kontinuierlich; σ aus den letzten 30 Tagen Orders des Shops, RPV-Varianz ≈ CR·E[AOV²] − (CR·AOV)²), für AOV dasselbe auf Order-Basis. Zweitrangig: CR zuerst, RPV/AOV dürfen in WP5 nachziehen – aber vor WP7, weil vier der geplanten Tests RPV haben
   - `evaluate(experiment, variantStats)` → pro Variante: `visitors, orders, cr, rpv, aov, lift, ci, pValue`, plus `srm`, plus `sampleSizeReached: boolean`. **`significant` ist nur `true`, wenn `sampleSizeReached && pValue < alpha`.** Regeln aus 4.8: CR auf konvertierende Visitors, Attribution-Fenster bis `endedAt`, Urteil nur Primärmetrik, Bonferroni bei mehr als zwei Varianten
-- `stats.server.ts`: **Live-Aggregation** aus `Exposure ⨝ OrderAttribution ⨝ Order ⨝ Refund` für laufende Experimente – eine Query, Indizes auf `(experimentId, variantId)`, `(orderId)`, `(experimentId, firstSeenAt)`; Zielzeit < 500 ms bei 1 Mio. Exposures. Revenue pro Visitor = Summe seiner attribuierten Orders minus Refunds; Order-Filter (`sourceName`, `isTest`, `cancelledAt`) und Attribution-Fenster exakt nach 4.8; `isBot`-Exposures ausgeschlossen.
+  - Der `evaluate()`-Output ist zugleich der `numbers`-Teil des Snapshots `ExperimentResult.snapshot` (§3): deshalb zusätzlich dieselben Kennzahlen je Device (`byDevice: { mobile, desktop, tablet }`), `window { from, to }`, `taintedDays`, `botShare`, und `lib/stats` exportiert eine `STATS_VERSION`-Konstante (semver, bei jeder Änderung an einer Testfunktion erhöhen). Einfrieren und Persistenz sind WP5.
+- `stats.server.ts`: **Live-Aggregation** aus `Exposure ⨝ OrderAttribution ⨝ Order ⨝ Refund` für laufende Experimente – eine Query, Indizes auf `(experimentId, variantId)`, `(orderId)`, `(experimentId, firstSeenAt)`; Zielzeit < 500 ms bei 1 Mio. Exposures. Revenue pro Visitor = Summe seiner attribuierten Orders minus Refunds; Order-Filter (`sourceName`, `isTest`, `cancelledAt`) und Attribution-Fenster exakt nach 4.8; `isBot`-Exposures ausgeschlossen. **Tainted Days:** Exposures, deren `firstSeenAt` (in `Shop.timezone`) auf einen Tag aus `Experiment.taintedDays` fällt, werden samt ihren Orders ausgeschlossen – der Visitor existiert für die Auswertung nicht.
 - `guardrail(variantStats)` in `lib/stats`: ab 500 Visitors pro Arm, wenn CR einer Variante < 50 % der Control → `warning: "possible breakage"`. Kein Auto-Stop, nur Hinweis.
 - Render Cron Job (täglich 03:00) → `POST /jobs/daily-stats` mit Secret-Header: `DailyStat` materialisieren – nur für Historie und Charts (Phase 2), nie Quelle der Results-Seite
 - A/A-Monte-Carlo als Test: 10 000 simulierte Experimente (Bernoulli-Conversion mit CR 2–4 %, Lognormal-AOV, n = 5 000–50 000 pro Arm) → Anteil `pValue < 0.05` muss zwischen 4 % und 6 % liegen, für CR **und** RPV separat
@@ -562,9 +610,10 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
 - Test-Suite grün inkl. A/A-Simulation
 - FPR-Report in `lib/stats/README.md` mit den gemessenen Werten
 - `evaluate()` gibt für ein Experiment ohne erreichte Sample Size nie `significant: true`
+- Test: ein Tag in `taintedDays` reduziert `visitors` und `orders` genau um die Exposures dieses Tages; `byDevice` summiert sich auf die Gesamtwerte
 
 **Session-Prompt (EN)**
-> Read CLAUDE.md and docs/plan.md 4.8 and WP4. Build lib/stats as pure TypeScript and apply the counting definitions in 4.8 exactly. Before writing any test statistic, write the reference tests first: reproduce at least three published worked examples (two-proportion z-test, Welch t-test, chi-square GOF) to 4 decimals. Then implement the functions, then the A/A Monte-Carlo test (10,000 runs, both CR and RPV) asserting a false-positive rate between 4% and 6%. If the FPR is outside that band, the implementation is wrong – fix it, do not widen the band. Document measured FPR in the package README.
+> Read CLAUDE.md and docs/plan.md 4.8 and WP4. Build lib/stats as pure TypeScript and apply the counting definitions in 4.8 exactly. Before writing any test statistic, write the reference tests first: reproduce at least three published worked examples (two-proportion z-test, Welch t-test, chi-square GOF) to 4 decimals. Then implement the functions, then the A/A Monte-Carlo test (10,000 runs, both CR and RPV) asserting a false-positive rate between 4% and 6%. If the FPR is outside that band, the implementation is wrong – fix it, do not widen the band. Document measured FPR in the package README. evaluate() must also return per-device numbers, the evaluation window, the tainted days it excluded and the bot share, because its output becomes the frozen ExperimentResult snapshot in WP5; export a STATS_VERSION constant. Exposures on tainted days (in the shop's timezone) are excluded together with their orders.
 
 ### WP5 – Dashboard mit Editor + API + CLI (4–5 Tage)
 
@@ -580,7 +629,9 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
   - Unsaved-Bar, Save/Discard, Inline-Validierung (Weights = 1.0, key unique, Regex kompiliert)
   - Editing-Regel nach 4.6 inkl. Warnung bei `RUNNING`
   - QA-Bereich: Force-Links pro Variante zum Kopieren (`https://shop.de/products/…?ab_force=key:b`)
-- **Results**: Varianten-Tabelle aus `evaluate()` (visitors, orders, CR, RPV, AOV, lift, CI, p-value), SRM-Badge, Sample-Size-Fortschritt, Bot-Anteil, AuditLog-Marker, Guardrail-Warnung; **Zähler live** (Auto-Refresh 60 s, "updated n seconds ago"); **vor erreichter Sample Size steht "Not yet conclusive – n/N visitors" und keine p-values**; Start/Pause/Stop-Buttons mit Bestätigung; Stop verlangt `decision` und `conclusion` (§3)
+- **Results**: Varianten-Tabelle aus `evaluate()` (visitors, orders, CR, RPV, AOV, lift, CI, p-value), SRM-Badge, Sample-Size-Fortschritt, Bot-Anteil, AuditLog-Marker, Guardrail-Warnung, Device-Split als aufklappbare Zeilen; **Zähler live** (Auto-Refresh 60 s, "updated n seconds ago"); **vor erreichter Sample Size steht "Not yet conclusive – n/N visitors" und keine p-values**; Start/Pause/Stop-Buttons mit Bestätigung; Stop verlangt `decision` und `conclusion` (§3)
+- **Stop = Einfrieren**: Der Stop-Dialog ruft in einer Transaktion `evaluate()`, schreibt `ExperimentResult` (§3: `numbers` + `frozen` + `verdict`, `statsVersion`, `frozenAt`) und setzt erst dann `ENDED`. Für `ENDED`-Experimente liest die Results-Seite **ausschließlich** den Snapshot (Hinweis "Frozen on <date>, stats v<x>"), nie mehr die Live-Query. Kein "Recompute"-Button.
+- **Tainted Days**: Feld am Experiment (Liste von Datumswerten, Datepicker, nur bei `RUNNING`/`PAUSED` editierbar, AuditLog `UPDATED`); Results zeigt "n days excluded: …" und die Sample-Size-Anzeige rechnet ohne diese Tage
 - **Reconciliation**: Tabelle der täglichen Läufe pro Shop (Daten ab WP6)
 - **Audit Log** pro Experiment
 
@@ -594,12 +645,14 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
 - Targeting-Felder bei `RUNNING` disabled
 - Results ohne erreichte Sample Size zeigen keine p-values; Sekundärmetriken nie
 - Stop ohne `decision` ist nicht möglich
+- Stop erzeugt genau eine `ExperimentResult`-Row; danach eine Testbestellung mit Attribut → Results unverändert (Snapshot), Live-Query wird nicht mehr aufgerufen
+- Tag als tainted markieren → Visitors/Orders in Results sinken um die Exposures dieses Tages, Hinweis sichtbar
 - Testbestellung im Dev Store erscheint innerhalb von 60 s in Results, ohne Cron
 - Derselbe Workflow per CLI funktioniert ebenfalls
 - Dark- und Light-Theme, Mobile-Breite ohne horizontales Scrollen, keine Verstöße gegen DESIGN.md §9
 
 **Session-Prompts (EN)** – zwei Sessions empfohlen:
-> **5a** Read CLAUDE.md, docs/plan.md (4.6, WP5) and docs/DESIGN.md in full. Build the dashboard pages Shops, Experiments list, Experiment create/edit and Results using only the components and recipes from DESIGN.md (no other UI libraries; CodeMirror 6 is the single allowed exception, for the JS and CSS fields). Implement the editing rule from contract 4.6 including the running-experiment warning, AuditLog entries and the report marker. Include the sample-size calculator in the form. The Results page must never show p-values or a winner before plannedSampleSize is reached. All UI text in English.
+> **5a** Read CLAUDE.md, docs/plan.md (4.6, WP5) and docs/DESIGN.md in full. Build the dashboard pages Shops, Experiments list, Experiment create/edit and Results using only the components and recipes from DESIGN.md (no other UI libraries; CodeMirror 6 is the single allowed exception, for the JS and CSS fields). Implement the editing rule from contract 4.6 including the running-experiment warning, AuditLog entries and the report marker. Include the sample-size calculator in the form. The Results page must never show p-values or a winner before plannedSampleSize is reached. Stopping an experiment must freeze an ExperimentResult snapshot (section 3) in the same transaction that sets ENDED; ended experiments render from the snapshot only. Add the tainted-days editor (list of dates) and show excluded days in Results. All UI text in English.
 
 > **5b** Read docs/plan.md 4.7 and WP5. Implement the bearer-token JSON API (tokens generated per user in the dashboard, stored as hashes, expiring after 90 days, shop-scoped routes) and the sh-ab CLI in lib/cli. The CLI must use exactly the same service layer as the dashboard – no duplicated business logic. `push` on a RUNNING experiment requires `--force` and produces the same AuditLog entry as a UI edit.
 
@@ -610,14 +663,16 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
 - `MISMATCH` = Order-Count-Diff ≠ 0 **oder** Revenue-Diff > 0,5 %. Slack-Webhook bei jedem `MISMATCH`
 - Täglicher Slack-Digest (im selben Job): fehlgeschlagene `WebhookEvent`s (`attempts ≥ 5`), Snippet-Fehler aus `/proxy/err` pro Shop, Sentry-Fehleranzahl. Reconciliation fängt Webhook-Ausfälle erst am Folgetag – der Digest ist das Frühwarnsystem
 - `/jobs/retry-webhooks` (WP2) als Render Cron Job stündlich
+- `POST /jobs/cleanup` (Render Cron Job, täglich 05:00, Secret-Header): löscht `WebhookEvent`-Zeilen mit `receivedAt` älter als 30 Tage und `Exposure`-Zeilen mit `firstSeenAt` älter als 12 Monate (Retention `rahmen.md` §3, ADR-0024); in Batches à 10 000, loggt die Anzahl; läuft nie für ein Experiment, das noch `RUNNING` ist (kann bei 12 Monaten nicht vorkommen – wenn doch, Slack-Hinweis statt Löschung)
 - Bot-Filter härten: UA-Liste server-side, `isBot`-Exposures aus allen Aggregationen ausschließen, Dashboard zeigt Bot-Anteil pro Experiment
 
 **Abnahme**
 - Dev Store: 5 Bestellungen mit Attribut, 2 ohne → Reconciliation `OK` mit 5 = 5
 - Eine Order manuell aus unserer DB löschen → nächster Lauf `MISMATCH`, Slack-Alert kommt
+- Cleanup: je eine `WebhookEvent`- und `Exposure`-Row mit altem Datum anlegen → nach `/jobs/cleanup` weg, jüngere Rows unverändert
 
 **Session-Prompt (EN)**
-> Read CLAUDE.md and docs/plan.md WP6. Implement the daily reconciliation job (a secret-protected HTTP endpoint triggered by a Render Cron Job) comparing attributed orders in our DB against Shopify Admin GraphQL orders carrying the `_ab` custom attribute, persist ReconciliationRun, show it in the dashboard, and post to a Slack webhook on mismatch, plus a daily Slack digest (failed webhook events, snippet errors per shop, Sentry error count). Schedule /jobs/retry-webhooks hourly. Harden bot filtering server-side and exclude isBot exposures from all aggregations.
+> Read CLAUDE.md and docs/plan.md WP6. Implement the daily reconciliation job (a secret-protected HTTP endpoint triggered by a Render Cron Job) comparing attributed orders in our DB against Shopify Admin GraphQL orders carrying the `_ab` custom attribute, persist ReconciliationRun, show it in the dashboard, and post to a Slack webhook on mismatch, plus a daily Slack digest (failed webhook events, snippet errors per shop, Sentry error count). Schedule /jobs/retry-webhooks hourly and add /jobs/cleanup (daily) that deletes WebhookEvent rows older than 30 days and Exposure rows older than 12 months in batches. Harden bot filtering server-side and exclude isBot exposures from all aggregations.
 
 ### WP7 – A/A-Test auf einem Kunden-Shop (14 Tage Laufzeit, ~1 Tag Arbeit) – Abnahme Phase 1
 
@@ -726,34 +781,36 @@ pnpm deploy         # shopify app deploy (extensions) – ask before running
 
 ## 8. Offene Entscheidungen
 
-Entschieden: Framework (Template, non-embedded, kein Polaris), Auth (Google OAuth direkt), Namespace (`$app:sh_ab`), Editor im UI (ja), UI-Sprache (Englisch), Hosting (8.1), Consent (8.2), Visitor-Cookie (8.5), Retention (8.6). Offen: 8.3 und 8.4, beide vor WP1.
+Entschieden: Framework (Template, non-embedded, kein Polaris), Auth (Google OAuth direkt), Namespace (`$app:sh_ab`), Editor im UI (ja), UI-Sprache (Englisch), Hosting (8.1), Consent (8.2), Zahlenformat (8.3), Pooling (8.4), Retention (8.6). **Wieder offen: 8.5** – die Verifikation in WP0 (ADR-0099 e/f) hat die Annahmen zu `_shopify_y` und zu `Set-Cookie` über den App Proxy widerlegt; Entscheidung vor WP3.
 
-**8.1 Hosting – entschieden: Render Web Service (v3.3, ersetzt Firebase App Hosting aus v3).** Alles auf einer Plattform: App, Postgres und Cron im selben Render-Workspace in Frankfurt, DB über die interne URL. Kein zweites Cloud-Projekt, keine Blaze-Kreditkarte, kein Cloud-Run-Cold-Start. Was das kostet: Der Free-Plan schläft nach 15 min ohne Traffic ein und braucht 30 s+ zum Aufwachen – Shopify-Webhooks laufen dann in den 5-s-Timeout (Shopify retried zwar, aber ein Dev Store hat stundenlang keinen Traffic, Einschlafen wäre der Normalfall). Deshalb **Starter (~7 $/Monat) ab WP1**, keine Free-Phase. Starter = eine Instanz, kein Autoscaling – reicht für Phase 1 locker (Beacons sind winzige Requests, Webhooks kommen pro Order). Mehr Instanzen bei Bedarf manuell, dann greift §8.4 B. Cron: drei Render Cron Jobs – daily-stats, reconcile, retry-webhooks – (Docker-Image `curlimages/curl`, je min. 1 $/Monat), die die secret-geschützten `/jobs/*`-Endpoints aufrufen – die Endpoints bleiben, damit man Jobs auch manuell anstoßen kann. Alternative ohne Extra-Services: `node-cron` im App-Prozess; geht nur, solange es genau eine Instanz gibt. Firebase entfällt komplett (v3.4: Google OAuth direkt).
+**8.1 Hosting – entschieden: Render Web Service (v3.3, ersetzt Firebase App Hosting aus v3).** Alles auf einer Plattform: App, Postgres und Cron im selben Render-Workspace in Frankfurt, DB über die interne URL. Kein zweites Cloud-Projekt, keine Blaze-Kreditkarte, kein Cloud-Run-Cold-Start. Was das kostet: Der Free-Plan schläft nach 15 min ohne Traffic ein und braucht 30 s+ zum Aufwachen – Shopify-Webhooks laufen dann in den 5-s-Timeout (Shopify retried zwar, aber ein Dev Store hat stundenlang keinen Traffic, Einschlafen wäre der Normalfall). Deshalb **Starter (~7 $/Monat) ab WP1**, keine Free-Phase. Starter = eine Instanz, kein Autoscaling – reicht für Phase 1 locker (Beacons sind winzige Requests, Webhooks kommen pro Order). Mehr Instanzen bei Bedarf manuell, dann greift §8.4 B. Cron: vier Render Cron Jobs – daily-stats, reconcile, retry-webhooks, cleanup – (Docker-Image `curlimages/curl`, je min. 1 $/Monat), die die secret-geschützten `/jobs/*`-Endpoints aufrufen – die Endpoints bleiben, damit man Jobs auch manuell anstoßen kann. Alternative ohne Extra-Services: `node-cron` im App-Prozess; geht nur, solange es genau eine Instanz gibt. Firebase entfällt komplett (v3.4: Google OAuth direkt).
 
 **8.2 Consent-Verhalten – entschieden: pro Shop.** `Shop.requireConsent` legt fest, ob ein Shop nur mit Consent oder immer trackt; das ist eine Entscheidung pro Kunde, nicht des Tools. Technik: einzige Schnittstelle ist `Shopify.customerPrivacy` (`analyticsProcessingAllowed()`, Event `visitorConsentCollected`). Das Consent-Tool des Kunden muss diese API bedienen – Pandectes und Consentmo tun das nativ, Cookiebot über seine Shopify-App; wird beim Onboarding pro Kunde geprüft. Ohne Consent: kein Cookie, kein Bucketing, Control, kein Exposure, kein Attribut. Bekannter Bias: Consent-Verweigerer fehlen komplett und die Sample-Größe schrumpft je nach Banner um 20–40 % – steht als Hinweis im Report, sobald `requireConsent` aktiv ist. Default `false`.
 
-**8.3 Zahlenformat bei englischer UI.** Vorschlag: UI-Text Englisch, Zahlen/Beträge/Daten `de-DE` (Kunden und Beträge sind deutsch). Alternative: alles `en-DE` / `en-GB`. Wirkt sich nur auf `Intl.NumberFormat`-Aufrufe aus, ist später umschaltbar.
+**8.3 Zahlenformat bei englischer UI – entschieden (WP0, ADR-0022): UI-Text Englisch, Zahlen, Beträge und Daten `de-DE`** (`1.234,56 €`, `20.09.2026`, `Intl.NumberFormat`/`Intl.DateTimeFormat` mit `de-DE`). Kunden und Beträge sind deutsch. Alternative `en-GB`/`en-DE` verworfen – nur `Intl`-Aufrufe betroffen, bleibt umschaltbar. Eine Format-Helper-Datei, keine Inline-Locales.
 
-**8.4 Connection Pooling – muss vor WP1 entschieden sein.** Mit Render Starter läuft genau eine Instanz, die Frage ist also entspannter als unter Cloud Run: `Instanzen × connection_limit` muss unter dem `max_connections` des Postgres-Plans bleiben (kleine Pläne: ~100, Render reserviert 10 davon) – mit einer Instanz trivial. Relevant wird es erst, wenn manuell hochskaliert wird (§8.1).
+**8.4 Connection Pooling – entschieden (WP0, ADR-0023): Option A.** `connection_limit=10&pool_timeout=5` in der Prisma-URL, eine Render-Starter-Instanz → max. 10 Verbindungen; `max_connections` des gewählten Plans in WP1 im Render-Dashboard ablesen und in `STATUS.md` notieren. Hintergrund: Mit Render Starter läuft genau eine Instanz, die Frage ist also entspannter als unter Cloud Run: `Instanzen × connection_limit` muss unter dem `max_connections` des Postgres-Plans bleiben (kleine Pläne: ~100, Render reserviert 10 davon) – mit einer Instanz trivial. Relevant wird es erst, wenn manuell hochskaliert wird (§8.1).
 
 - *A – kein Pooler (Empfehlung für Phase 1).* `connection_limit=10&pool_timeout=5` in der Prisma-URL, eine Instanz → max. 10 Verbindungen. `pool_timeout` kurz, damit Beacons unter Last nicht hängen, sondern schnell scheitern.
 - *B – Render PgBouncer (sobald mehr als eine Instanz).* Render Postgres hat auf bezahlten Plänen integriertes Pooling: Port 6432, Transaction-Mode, kostenlos. Runtime-URL mit `?pgbouncer=true&connection_limit=5` auf 6432, Migrationen über die Direct-URL auf 5432. Transaction-Mode verbietet Session-Features (Advisory Locks, LISTEN/NOTIFY, Temp Tables) – nutzen wir nicht. Der Wechsel ist nur eine Env-Var, deshalb kein Grund, jetzt schon damit anzufangen.
 - *C – externer Pooler-Dienst.* Extra Kosten, extra Abhängigkeit. Nein.
 
-Vor WP1 klären: (1) `max_connections` des gewählten Postgres-Plans im Dashboard ablesen, (2) `connection_limit` und `pool_timeout=5` in der Prisma-URL setzen. Ergebnis als ADR.
+WP1 setzt (1) `connection_limit=10&pool_timeout=5` in der Prisma-URL und (2) liest `max_connections` des Plans im Dashboard ab. ADR-0023.
 
-**8.5 Visitor-Cookie unter Safari ITP – entschieden: A, `_shopify_y`.** Regel steht in 4.4; WP0 (e) verifiziert, dass `_shopify_y` per HTTP gesetzt und per JS lesbar ist – fällt das durch, greift B. Hintergrund: Safari kappt per JS gesetzte Cookies auf 7 Tage und löscht script-writable Storage nach 7 Tagen ohne Besuch. Ein `_shab_vid`, das das Snippet setzt, hält bei ~30 % des Mobile-Traffics keine 14 Tage – Wiederkehrer werden neu gebucketed und doppelt gezählt. Drei Wege:
+**8.5 Visitor-Cookie unter Safari ITP – entschieden: A, `_shopify_y`. ⚠️ WP0-Verifikation (ADR-0099 e/f) negativ:** Shopify setzt `_shopify_y` seit 01.01.2026 nicht mehr (Changelog 04.08.2025), der Ersatz `clientId` existiert nur im Web-Pixel-Sandbox, und App-Proxy-Responses verlieren `Set-Cookie` – A trägt nicht, C ist unmöglich. Entscheidung liegt bei Joel, vor WP3; §1 und 4.4 bleiben bis dahin unverändert. Ursprünglicher Text: Regel steht in 4.4; WP0 (e) verifiziert, dass `_shopify_y` per HTTP gesetzt und per JS lesbar ist – fällt das durch, greift B. Hintergrund: Safari kappt per JS gesetzte Cookies auf 7 Tage und löscht script-writable Storage nach 7 Tagen ohne Besuch. Ein `_shab_vid`, das das Snippet setzt, hält bei ~30 % des Mobile-Traffics keine 14 Tage – Wiederkehrer werden neu gebucketed und doppelt gezählt. Drei Wege:
 - *A – `_shopify_y` als Visitor-ID (gewählt).* Shopifys eigener Analytics-Cookie: per HTTP gesetzt, ein Jahr, ITP-fest, und dieselbe Besucher-Definition wie Shopify Analytics. Unter Consent-Pflicht setzt Shopify ihn erst nach Consent – passt zu 8.2. Fallback auf eigenen Cookie, falls er fehlt.
 - *B – Cookie per HTTP über eine Kunden-Subdomain (CNAME → unser Service).* So haben wir es bisher gelöst. Funktioniert, kostet aber pro Kunde eine DNS-Änderung, Custom Domain + TLS auf Render und einen zweiten Endpoint außerhalb des App-Proxys. Nur, wenn A nicht trägt.
 - *C – `Set-Cookie` über die App-Proxy-Response.* Wäre das Sauberste; ob Shopify den Header durchreicht, prüft WP0 (f).
 ADR in WP0.
 
-**8.6 Retention bei `shop/redact` und Uninstall – entschieden.** `shop/redact` kommt 48 h nach dem Uninstall und verlangt das Löschen der Shop-Daten. Regel: `Order`, `OrderLineItem`, `Refund`, `Exposure`, `WebhookEvent`, `ReconciliationRun` und der Token werden gelöscht; `Shop`, `Experiment`, `Variant`, `AuditLog`, `decision`/`conclusion` und ein eingefrorener Ergebnis-Snapshot pro Experiment (`evaluate()`-Output als JSON, ohne Personenbezug) bleiben – das sind unsere Learnings. Ob aggregierte Kennzahlen unter "Shop-Daten" fallen, ist juristisch nicht abgesichert; bis jemand das Gegenteil sagt, gilt die Regel. Reinstall innerhalb 48 h: nichts wird gelöscht.
+**8.6 Retention bei `shop/redact` und Uninstall – entschieden.** `shop/redact` kommt 48 h nach dem Uninstall und verlangt das Löschen der Shop-Daten. Regel: `Order`, `OrderLineItem`, `Refund`, `Exposure`, `WebhookEvent`, `ReconciliationRun` und der Token werden gelöscht; `Shop`, `Experiment`, `Variant`, `AuditLog`, `decision`/`conclusion` und ein eingefrorener Ergebnis-Snapshot pro Experiment (`evaluate()`-Output als JSON, ohne Personenbezug) bleiben – das sind unsere Learnings. Ob aggregierte Kennzahlen unter "Shop-Daten" fallen, ist juristisch nicht abgesichert; bis jemand das Gegenteil sagt, gilt die Regel. Reinstall innerhalb 48 h: nichts wird gelöscht. Der Snapshot ist jetzt das Modell `ExperimentResult` (§3, v3.7).
+
+*Offene juristische Notiz (aus `rahmen.md` 3.3, kein Task):* Ob der Shop-Bezug des Snapshots bei `shop/redact` pseudonymisiert werden darf und muss ("Shop D, Pet Supplies, ~1k Orders/Tag" statt Domain), damit die Learnings-Datenbank (Phase 2) bei Kündigung ihre Substanz behält, ist mit einem Anwalt zu klären. Bis dahin bleibt `ExperimentResult.shopId` stehen; die Frage hat keinen Einfluss auf Phase 1.
 
 ---
 
 ## 9. Ausblick Phase 2 und 3 (nur Stichpunkte, nicht Teil dieses Plans)
 
-**Phase 2 – Nutzbar machen:** Targeting `utm`/`country`/`referrer`/`customerStatus` · Redirect-Experimente (`type: REDIRECT`, Template-Tests via `?view=`) · Sequential Testing (mSPRT) · Bootstrap-CI für RPV · Charts im Dashboard (handgeschriebene SVGs nach DESIGN.md) · MCP Server auf der bestehenden API · Learnings-Datenbank über alle Kunden · Mutual Exclusion zwischen Experimenten · Client-Ansicht im Dashboard (Rolle `CLIENT`, read-only Results der eigenen Shops, Einladung per Mail) · Cross-Device für eingeloggte Kunden über Customer-Metafield (aus Phase 3 vorgezogen) · Ergebnis-Snapshot pro Experiment für die Learnings-DB
+**Phase 2 – Nutzbar machen:** Targeting `utm`/`country`/`referrer`/`customerStatus` · Redirect-Experimente (`type: REDIRECT`, Template-Tests via `?view=`) · Sequential Testing (mSPRT) · Bootstrap-CI für RPV · Charts im Dashboard (handgeschriebene SVGs nach DESIGN.md) · MCP Server auf der bestehenden API · Learnings-Datenbank über alle Kunden · Mutual Exclusion zwischen Experimenten · Client-Ansicht im Dashboard (Rolle `CLIENT`, read-only Results der eigenen Shops, Einladung per Mail) · Cross-Device für eingeloggte Kunden über Customer-Metafield (aus Phase 3 vorgezogen) · Screenshot je Variante im `ExperimentResult`-Snapshot (Pflicht beim Stop, `rahmen.md` 3.2) · automatische Tainted-Day-Erkennung (Ingestion-Lücke > 30 min oder Verlust > 2 % → Tag automatisch in `taintedDays`, `rahmen.md` 7.2)
 
 **Phase 3 – Preis- und Versandtests:** Shopify Functions als Extensions im selben Repo (Delivery Customization, Discount, Cart Transform – Preisänderung in beide Richtungen vorher gegen die Doku prüfen) · Functions lesen `cart.attribute("_ab")` und `$app:sh_ab.server` · `unitCost` aus `inventory_item.cost` für Profit-Metrik · Rechtliche Freigabe (PAngV § 11, UWG) vor dem ersten Live-Test

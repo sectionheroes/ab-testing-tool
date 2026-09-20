@@ -2,27 +2,28 @@
 Stand: 2026-09-20
 
 ## Aktuell
-WP: WP0 – Vorbereitung · Branch: –
+WP: WP0 – Vorbereitung · Branch: `main` · Nächstes WP: WP1 (blockiert durch die Checkliste unten)
 
-## Fertig
-–
+## Fertig (WP0, Claude-Code-Teil)
+- Repo-Baseline: `.gitignore`, `CLAUDE.md` (wörtlich aus plan.md §6), `.DS_Store` enttrackt
+- `rahmen.md` mit `plan.md` v3.7 abgeglichen: Retention bestätigt, `ExperimentResult` + `taintedDays` in §3, `/jobs/cleanup` in WP6, 8.3 = de-DE, 8.4 = Option A, Slack bleibt, obsolete Punkte (Hosting, Firebase, DSGVO-Webhooks, `revenueSumSq`) raus
+- ADR-0001…0027 (alle §1-Entscheidungen + Zahlenformat, Pooling, Retention, Snapshot, Tainted Days, Alerts), ADR-0099 (Doku-Verifikation)
+- Shopify-Doku-Verifikation (a, c–h) per Dev MCP, Checkliste in plan.md WP-R
 
-## In Arbeit
-Doku-Grundgerüst: konzept.md, plan.md (v3.6), DESIGN.md, STATUS.md, ADR-Template. Kein Code, kein Repo.
+## Offen / Blockiert
+- **8.5 Visitor-ID muss neu entschieden werden (Joel, vor WP3):** `_shopify_y` wird seit 01.01.2026 nicht mehr gesetzt, App-Proxy-Responses verlieren `Set-Cookie` (ADR-0099 e/f). Übrig: B (HTTP-Cookie über Kunden-Subdomain/CNAME) oder JS-Cookie mit 7-Tage-ITP-Risiko. §1 und Vertrag 4.4 bewusst unverändert.
+- Review-Risiko non-embedded Dashboard (ADR-0099 c/g, Req. 2.2.2): nicht belegbar, nur mitigierbar – Fallback Custom-Distribution-App steht.
+- `_ab`-Sichtbarkeit im Admin nicht auf shopify.dev dokumentiert → WP3-Abnahme auf dem Dev Store.
+- Pseudonymisierung bei `shop/redact` juristisch offen (plan.md 8.6, kein Task).
+- PCD-Antrag muss **vor** der Review-Einreichung gestellt sein (nicht währenddessen möglich).
 
-## Blockiert
-- PCD-Approval Level 1 – noch nicht beantragt (Joel, §7 im Plan)
-- Offene Entscheidungen: 8.3 Zahlenformat und 8.4 Connection Pooling (vor WP1)
-- App-Review ist Pflicht vor WP7 (WP-R, Einreichung nach WP3, Puffer 4 Wochen); WP0 (g) prüft, ob "embedded" zwingend ist
-- `rahmen.md` fehlt noch
-
-## Zuletzt geändert
-- Plan v3.6: App Review als Pflicht (WP-R nach WP3), Install offen + Freischaltung per Allowlist/Aktivierungscode, hybrid embedded `/app` + non-embedded Dashboard, Fallback Custom-Distribution-App. Konzept: Nicht-Ziele, Risiko, §9 angepasst.
-- Plan v3.5: 8.5 entschieden (`_shopify_y` als Visitor-ID, Fallback-Regel in 4.4), 8.6 entschieden (Retention-Regel).
-- Plan v3.4: Review-Runde eingearbeitet – Google OAuth statt Firebase, Install-Allowlist, Dev-/Prod-App, PII-Strip, Visitor-ID immer Cookie + Login-Link, Consent entschieden, Vertrag 4.8 Zähl-Definitionen, fetch keepalive, Cart-Token-Merker, Rolle CLIENT, decision/conclusion, Sentry + Digest, Retry statt Queue; neu offen 8.5/8.6. Konzept: Kunde-Rolle, Cross-Device ab Phase 2, Risiko Dashboard-Zugriff.
-- Plan v3.3: Hosting zurück auf Render Web Service (Starter, Frankfurt), Render Cron Jobs statt Cloud Scheduler, Firebase nur noch für Auth; §8.4 Empfehlung jetzt A (eine Instanz), B erst beim Skalieren
-- Konzept: Live-Zähler statt "keine Echtzeit"; Notbremse als Hinweis, nicht Urteil; §7 Besucherzahl präzisiert (Shopify misst Sessions genauso im Browser)
-- Plan v3.2: Results live per Query, `guardrail()` in lib/stats, DailyStat nur Historie
-- Konzept neu geschrieben: Build-vs-Buy ehrlich, Nicht-Ziele, 10 geplante Tests, Datenqualitäts-Versprechen, Weggabelung intern/Public
-- Plan auf v3.1: §0 Verweise auf rahmen.md/STATUS.md, §8.4 Connection Pooling (Empfehlung: Render PgBouncer), ADR-Format
-- STATUS.md und docs/adr/ angelegt; altes Konzept v1 nach archiv/
+## WP1 braucht von Joel (Stand: nichts davon im Repo belegt – bitte abhaken)
+- [ ] Render: Postgres (Frankfurt) angelegt, interne + externe URL, `max_connections` des Plans notiert
+- [ ] Render: Web Service (Starter, Frankfurt) mit dem GitHub-Repo verbunden, Auto-Deploy `main`
+- [ ] Partner Dashboard: zwei Apps `sh-ab-dev` und `sh-ab` (Public, unlisted), Client-IDs/Secrets
+- [ ] Zwei Development Stores (einer allowlisted, einer für den Aktivierungscode-Test)
+- [ ] Google Cloud: OAuth-Client (Web), Consent Screen "Internal"; Client-ID + Secret
+- [ ] Sentry-Projekt (free), DSN
+- [ ] Slack Incoming-Webhook-URL
+- [ ] Entscheidung 8.5 (Visitor-ID) – spätestens vor WP3, gern vor WP1
+- [ ] PCD Level 1 im Partner Dashboard für die Prod-App auswählen (Review-Antrag erst mit WP-R)

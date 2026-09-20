@@ -1,6 +1,6 @@
 # Rahmen – sh-ab, Phase 1
 
-*Stand: 19.09.2026. Die Zahlen und Grenzen, gegen die Infrastruktur-Entscheidungen getroffen werden. Schätzungen, Größenordnung zählt. Was hier steht, gilt, bis es hier geändert wird. Das Warum steht in `konzept.md`, das Wie in `plan.md`, der aktuelle Stand in `STATUS.md`.*
+*Stand: 20.09.2026 (abgeglichen mit `plan.md` v3.7). Die Zahlen und Grenzen, gegen die Infrastruktur-Entscheidungen getroffen werden. Schätzungen, Größenordnung zählt. Was hier steht, gilt, bis es hier geändert wird. Das Warum steht in `konzept.md`, das Wie in `plan.md`, der aktuelle Stand in `STATUS.md`.*
 
 ---
 
@@ -34,7 +34,7 @@
 
 **Kernanforderung: Testergebnisse müssen dauerhaft abrufbar sein, Horizont mindestens 2 Jahre.** Das ist die härteste Anforderung in diesem Dokument und steht im Konflikt mit der DSGVO-Löschfrist für Rohdaten (§3.3). Aufgelöst wird sie über den unveränderlichen, anonymen Ergebnis-Snapshot (§3.2): Er enthält keine personenbezogenen Daten, bleibt dauerhaft, und die Rohdaten darunter dürfen verschwinden. Ohne diesen Snapshot müsste man sich zwischen Ergebnis-Historie und Rechtskonformität entscheiden.
 
-Alle weiteren Punkte hier sind **Vorschlag, von Joel zu bestätigen**, und gehören danach als ADR ins Repo.
+Die Retention-Tabelle ist **bestätigt** (20.09., ADR-0024); der Cleanup-Job dazu liegt in `plan.md` WP6 (`/jobs/cleanup`).
 
 | Daten | Retention | Begründung |
 |---|---|---|
@@ -44,7 +44,7 @@ Alle weiteren Punkte hier sind **Vorschlag, von Joel zu bestätigen**, und gehö
 | `Order` / `OrderLineItem` / `Refund` | Dauerhaft | Klein, Basis jeder Nachrechnung |
 | `Exposure` | 12 Monate, dann löschen | ~9 GB/Jahr bei 6 Shops. Frist auch aus DSGVO-Gründen nötig |
 | `DailyStat` | Dauerhaft | Klein, Grundlage der Learnings-Datenbank |
-| `ExperimentResult` (neu, §3.2) | Dauerhaft, unveränderlich | Report unabhängig von Rohdaten |
+| `ExperimentResult` (§3.2) | Dauerhaft, unveränderlich | Report unabhängig von Rohdaten; wird bei `shop/redact` nicht gelöscht (`plan.md` 8.6) |
 | `AuditLog` | Dauerhaft | Klein, Nachvollziehbarkeit |
 
 ### 3.1 Schlankes `Order.raw`
@@ -53,11 +53,11 @@ Nicht der volle Shopify-Payload, sondern: `note_attributes`, `line_items` (id, v
 
 Der volle Payload ist über die Shopify API jederzeit nachladbar, solange die App installiert ist. Dauerhafte Vollspeicherung ist damit doppelt.
 
-### 3.2 Zwei Modell-Ergänzungen, die aus der Retention folgen
+### 3.2 Ergebnis-Snapshot `ExperimentResult`
 
-**`DailyStat` braucht `revenueSumSq` und `orderCount` – sofern die Stats-Engine aus DailyStat liest.** Der winsorized Welch t-test auf RPV braucht die Varianz, nicht nur Tagessummen. Das ist keine Retention-Frage (Tagesverläufe werden langfristig nicht gebraucht), sondern eine der Architektur: Liest `stats.server` das aggregierte DailyStat, müssen die Felder rein; rechnet es direkt auf Exposures und Orders, nicht. Vor WP-Start klären.
+*(Die frühere Frage nach `DailyStat.revenueSumSq` ist erledigt: Die Stats-Engine rechnet live auf `Exposure`/`Order` (`plan.md` v3.2), `DailyStat` ist nur Historie. Keine Zusatzfelder nötig.)*
 
-**Neues Modell `ExperimentResult`.** Beim Übergang auf `ENDED` wird das Ergebnis einmal berechnet und eingefroren. Danach hängt kein Report mehr an den Rohdaten. Trägt die zentrale Langzeit-Anforderung und ist deshalb der wichtigste Teil des Datenmodells.
+**Modell `ExperimentResult` – Phase 1, in `plan.md` §3 aufgenommen (ADR-0025).** Beim Übergang auf `ENDED` wird das Ergebnis einmal berechnet und eingefroren. Danach hängt kein Report mehr an den Rohdaten. Trägt die zentrale Langzeit-Anforderung und ist deshalb der wichtigste Teil des Datenmodells.
 
 Inhalt, als versioniertes JSON (`"v": 1`), ein paar KB pro Experiment:
 
@@ -67,18 +67,17 @@ Inhalt, als versioniertes JSON (`"v": 1`), ein paar KB pro Experiment:
 
 *Was der Test war* – eingefrorene Kopie von Hypothese, Variantencode (js/css), Targeting, Allocation, Weights, Salt, Trigger, Laufzeit, Marker für Code-Änderungen während der Laufzeit. `Variant` ist editierbar; ohne Kopie ist in zwei Jahren nicht mehr nachvollziehbar, was gemessen wurde.
 
-*Screenshot je Variante und Fazit in Prosa*, erfasst beim Beenden – **Pflichtfeld**. Da der Snapshot das Einzige ist, was langfristig überlebt, sind Bild und Kontext hier wertvoller als jede weitere Kennzahl. Eine Minute Handarbeit pro Test.
+*Fazit in Prosa* (`decision` + `conclusion` am Experiment), erfasst beim Beenden – **Pflichtfeld**, wird in den Snapshot kopiert. Der *Screenshot je Variante* ist Phase 2 (`plan.md` §9); da der Snapshot das Einzige ist, was langfristig überlebt, bleibt er auf der Liste.
 
-**Regel: Ergebnisse werden nie neu berechnet, nur gelesen.** Sonst zeigt ein alter Report nach einer Änderung an der Stats-Engine plötzlich andere Zahlen als damals berichtet.
+**Regel: Ergebnisse werden nie neu berechnet, nur gelesen.** Sonst zeigt ein alter Report nach einer Änderung an der Stats-Engine plötzlich andere Zahlen als damals berichtet. Berechnung: `evaluate()` in WP4; Einfrieren und Anzeige: WP5.
 
-### 3.3 DSGVO – offene Lücke im Plan
+### 3.3 DSGVO
 
-`Exposure` enthält visitorId, customerId, Referrer, UTM, Country – personenbezogene Daten.
+`Exposure` enthält visitorId, customerId, Referrer, UTM, Country – personenbezogene Daten. Deshalb die 12-Monats-Frist oben.
 
-- Die von Shopify vorgeschriebenen Compliance-Webhooks (`customers/data_request`, `customers/redact`, `shop/redact`) fehlen bisher in Datenmodell und Arbeitspaketen. Spätestens für den PCD-Antrag nötig.
-- Fristen und genaue Anforderungen mit dem Shopify Dev MCP gegen die aktuelle Doku prüfen.
-- `shop/redact` löscht alle Daten des Shops – **außer** dem anonymen Ergebnis-Snapshot, dessen Shop-Bezug stattdessen pseudonymisiert wird ("Shop D, Pet Supplies, ~1k Orders/Tag"). Sonst verliert die Learnings-Datenbank (Phase 2) bei jeder Kündigung ihre Substanz. Juristisch zu bestätigen, nicht technisch zu entscheiden.
-- Zusammen mit der Consent-Frage (`plan.md` §8.2) zu entscheiden.
+- Compliance-Webhooks (`customers/data_request`, `customers/redact`, `shop/redact`): **erledigt** – Subscriptions in WP1, Handler in WP2 (seit `plan.md` v3.4). Fristen laut Shopify-Doku (ADR-0099 h): 200 sofort, Erledigung innerhalb 30 Tagen; `shop/redact` kommt 48 h nach Uninstall.
+- `shop/redact` löscht nach `plan.md` 8.6: Rohdaten weg, Shop/Experiment/Variant/AuditLog/`ExperimentResult` bleiben.
+- **Offen (juristisch, nicht technisch):** ob der Shop-Bezug des Snapshots bei `shop/redact` pseudonymisiert werden darf ("Shop D, Pet Supplies, ~1k Orders/Tag"), damit die Learnings-Datenbank (Phase 2) bei Kündigung ihre Substanz behält. Steht als Notiz in `plan.md` 8.6.
 
 ## 4. Budget
 
@@ -99,7 +98,7 @@ Inhalt, als versioniertes JSON (`"v": 1`), ein paar KB pro Experiment:
 - Kein harter Termin, läuft nebenher.
 - A/A-Test startet, wenn WP1–6 stehen.
 - Kein auslaufender Vertrag erzwingt einen Wechsel.
-- Einziger externer Blocker: Protected Customer Data Approval, muss bis WP7 vorliegen.
+- Einziger externer Blocker: Shopify App Review + Protected Customer Data Approval (`plan.md` WP-R), müssen bis WP7 vorliegen.
 
 ## 7. Verfügbarkeit und Risiko
 
@@ -107,7 +106,9 @@ Inhalt, als versioniertes JSON (`"v": 1`), ein paar KB pro Experiment:
 
 Akzeptierte Ausfallzeit: **mehrere Stunden**, solange sie in die Tainted-Regel unten fällt.
 
-**7.2 Tolerierbarer Datenverlust.** Regel: Lücke in der Exposure-Ingestion > 30 min, oder Verlust > 2 % der erwarteten Exposures an einem Tag → Tag wird als `tainted` markiert, aus dem Auswertungsfenster ausgeschlossen, Laufzeit entsprechend verlängert. Flag am Experiment, Anzeige im Report. Order-Daten sind hiervon nicht betroffen.
+**7.2 Tolerierbarer Datenverlust.** Regel: Lücke in der Exposure-Ingestion > 30 min, oder Verlust > 2 % der erwarteten Exposures an einem Tag → Tag wird als `tainted` markiert, aus dem Auswertungsfenster ausgeschlossen, Laufzeit entsprechend verlängert. Order-Daten sind hiervon nicht betroffen.
+
+Phase 1 (ADR-0026): **manuelles Flag** `Experiment.taintedDays` (Liste von Datumswerten), im Dashboard setzbar (WP5), in `stats.server` aus dem Auswertungsfenster ausgeschlossen (WP4), im Report und im Snapshot sichtbar. Wer die Lücke bemerkt (Sentry, Dashboard-Badge "keine Exposures 24 h", Digest), trägt den Tag ein. Automatische Erkennung ist Phase 2 (`plan.md` §9).
 
 **7.3 Snippet bricht einen Kundenshop.** Erkennung heute: Kunde oder Joel merkt es. Fix sofort. Kill Switch ist das Metafield-Update (Experiment raus = Snippet tut nichts).
 
@@ -117,19 +118,21 @@ Das ist der schwächste Punkt im ganzen Setup: Bei einem kaputten PDP ist "der K
 
 ## 8. Betrieb – bewusst minimal
 
-Niemand schaut täglich in ein Monitoring. Kein Slack. Daraus folgt: Das System muss dort warnen, wo ohnehin jemand hinschaut – im Dashboard.
+Niemand schaut täglich in ein Monitoring. Daraus folgt: Das System muss dort warnen, wo ohnehin jemand hinschaut – im Dashboard und in Slack (ADR-0027).
 
 **Im Dashboard, beim Laden berechnet, keine zusätzliche Infrastruktur:**
 Roter Badge am Experiment bei SRM p < 0,001 · keine Exposures in den letzten 24 h · Reconciliation-Abweichung > 2 % · Snippet-Fehler über Schwelle. In der Shop-Übersicht aggregiert, damit ein Blick reicht.
 
-**Sentry (Free Tier)** für Server-Fehler und Snippet-Fehler. Die einzige Ausnahme von "nicht overengineeren", Begründung in 7.3.
+**Slack (ein Incoming Webhook, `plan.md` WP6 und §7):** Nachricht bei jedem Reconciliation-`MISMATCH` und ein täglicher Digest (fehlgeschlagene Webhook-Events, Snippet-Fehler pro Shop, Sentry-Fehleranzahl, neue `PENDING`/`ACTIVE`-Shops). Der Digest ist das Frühwarnsystem – die Reconciliation fängt Webhook-Ausfälle erst am Folgetag.
 
-**Nicht bauen:** Slack-Alerts, Dashboards über Sentry hinaus, Uptime-Monitoring, On-Call, Log-Aggregation. Der Slack-Webhook aus `plan.md` §7 entfällt.
+**Sentry (Free Tier)** für Server-Fehler und Snippet-Fehler. Begründung in 7.3.
+
+**Nicht bauen:** Dashboards über Sentry hinaus, Uptime-Monitoring, On-Call, Log-Aggregation, Alerting-Regeln jenseits von Badge + Slack-Webhook.
 
 ## 9. Was daraus für die Architektur folgt
 
-1. **Connection Pooling (`plan.md` §8.4) ist ein kleines Thema.** Bei < 10 req/s reicht: `maxInstances` auf 3 deckeln, `connection_limit=5` pro Instanz → max. 15 Verbindungen. Kein PgBouncer, kein Accelerate.
-2. **Hosting-Entscheidung (§8.1) neu bewerten.** Sie war mit dem Free-Quota begründet; Kosten sind laut §4 nachrangig. Ohne dieses Argument sprechen Cold Starts, Cross-Cloud-Verbindung zur Render-DB, zweiter Provider und der nicht vorkonfigurierte Node-Pfad für React Router 7 gegen Firebase App Hosting. Ein immer laufender Render Web Service liegt im selben Netz wie die DB, hat keine Cold Starts und keinen zweiten Betriebsstrang. Firebase Auth bleibt davon unberührt. Cron dann über Render Cron Jobs statt Cloud Scheduler.
+1. **Connection Pooling – entschieden (`plan.md` 8.4 Option A, ADR-0023).** Bei < 10 req/s und genau einer Render-Starter-Instanz reicht `connection_limit=10&pool_timeout=5` in der Prisma-URL → max. 10 Verbindungen, weit unter `max_connections` des kleinsten Postgres-Plans. Kein PgBouncer, kein Accelerate. Render PgBouncer (Option B) erst, wenn manuell auf mehr als eine Instanz skaliert wird – der Wechsel ist eine Env-Var.
+2. **Hosting – entschieden (`plan.md` 8.1, v3.3, ADR-0007):** Render Web Service (Starter, Frankfurt), im selben Netz wie die DB, keine Cold Starts, Cron über Render Cron Jobs. Firebase ist komplett raus – Dashboard-Login per Google OAuth direkt (v3.4, ADR-0008).
 3. **DB-Dimensionierung:** Storage ist der einzige wachsende Posten. Mit der Retention aus §3 landet man bei grob 12–15 GB im ersten Jahr. Compute ist bei dieser Last unkritisch, der kleinste sinnvolle Plan genügt.
 4. **Keine Peak-Auslegung nötig** (§1).
 5. **Ein Betreiber** (§5): im Zweifel die langweiligere, wartungsärmere Variante.
@@ -138,9 +141,5 @@ Roter Badge am Experiment bei SRM p < 0,001 · keine Exposures in den letzten 24
 
 ## Offen
 
-- [ ] Retention (§3) bestätigen, dann ADR
-- [ ] Pseudonymisierung bei `shop/redact` (§3.3) juristisch klären
-- [ ] `DailyStat`-Felder und `ExperimentResult` in `plan.md` §3 aufnehmen
-- [ ] DSGVO-Webhooks (§3.3) als Arbeitspaket ergänzen, Fristen gegen Shopify-Doku prüfen
-- [ ] Hosting (§9.2) neu entscheiden, ADR aktualisieren
-- [ ] `plan.md` §8.4 (Pooling) mit der Empfehlung aus §9.1 schließen
+- [ ] Pseudonymisierung bei `shop/redact` (§3.3) juristisch klären – Notiz in `plan.md` 8.6
+- [ ] Visitor-ID: `_shopify_y` wird seit 01.01.2026 nicht mehr gesetzt und App-Proxy-Responses verlieren `Set-Cookie` (ADR-0099 e/f) – `plan.md` 8.5 muss von Joel neu entschieden werden, bevor WP3 startet
