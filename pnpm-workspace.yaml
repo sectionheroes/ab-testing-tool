@@ -9,3 +9,5 @@ allowBuilds:
   esbuild: true
   prisma: true
   unrs-resolver: true
+minimumReleaseAgeExclude:
+  - '@shopify/polaris-types@1.1.0'

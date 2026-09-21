@@ -218,6 +218,9 @@ importers:
       '@shopify/cli':
         specifier: 4.8.0
         version: 4.8.0
+      '@shopify/polaris-types':
+        specifier: ^1.1.0
+        version: 1.1.0
       '@tailwindcss/vite':
         specifier: ^4
         version: 4.3.3(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -1951,6 +1954,9 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       graphql: ^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0
+
+  '@shopify/polaris-types@1.1.0':
+    resolution: {integrity: sha512-hqd+58XbpsShQmTiMakiUraLL9yjeqcFkaEfiajdxAArQJGREsnNBxY1+cN0egWHFQ7/1Xsqjx0RObd3V0Fy1w==}
 
   '@shopify/shopify-api@13.1.0':
     resolution: {integrity: sha512-TwYL9kPxOgQwwlc9tmnAmSDs79Gdg9QLaIMCfkaCJxkhWxIHVkPWa74GvbBwnmTtB8jkg61Ja4/Qxrk9bCBUiA==}
@@ -6670,6 +6676,8 @@ snapshots:
       type-fest: 4.41.0
     transitivePeerDependencies:
       - graphql-sock
+
+  '@shopify/polaris-types@1.1.0': {}
 
   '@shopify/shopify-api@13.1.0':
     dependencies:
