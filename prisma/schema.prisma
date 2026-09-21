@@ -1,0 +1,96 @@
+// WP1 subset of docs/plan.md §3. Experiment, Variant, Exposure, Order, … follow in WP2.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ShopStatus {
+  ALLOWLISTED // pre-created in the dashboard, not installed yet
+  PENDING     // installed, not activated
+  ACTIVE
+  UNINSTALLED
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+  CLIENT
+}
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  CODE_CHANGED_WHILE_RUNNING
+}
+
+model Shop {
+  id             String     @id @default(cuid())
+  domain         String     @unique // "kunde.myshopify.com"
+  name           String
+  accessToken    String? // offline token, AES-256-GCM via services/crypto.server.ts; null while ALLOWLISTED / UNINSTALLED
+  session        String? // encrypted Shopify Session (toPropertyArray as JSON) incl. refresh token; read by ShopSessionStorage
+  scope          String? // granted scopes, updated by app/scopes_update
+  status         ShopStatus
+  requireConsent Boolean    @default(false)
+  timezone       String? // shop.ianaTimezone
+  installedAt    DateTime?
+  activatedAt    DateTime? // set on first ACTIVE; a reinstall after UNINSTALLED becomes ACTIVE again only if this is set
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  users          UserShop[]
+  auditLog       AuditLog[]
+  webhookEvents  WebhookEvent[]
+}
+
+model AuditLog {
+  id           String      @id @default(cuid())
+  shopId       String
+  shop         Shop        @relation(fields: [shopId], references: [id])
+  experimentId String?
+  actor        String // e-mail or "shopify:<domain>" / "system"
+  action       AuditAction
+  diff         Json?
+  at           DateTime    @default(now())
+
+  @@index([shopId, at])
+}
+
+model WebhookEvent {
+  id          String    @id @default(cuid())
+  shopId      String
+  shop        Shop      @relation(fields: [shopId], references: [id])
+  topic       String
+  shopifyId   String    @unique // X-Shopify-Webhook-Id – idempotency key
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+  attempts    Int       @default(0)
+  payload     Json? // PII-stripped via stripPii(); WP1: stored when WEBHOOK_STORE_PAYLOAD=true, WP2: only on error (ADR-0024)
+
+  @@index([shopId, receivedAt])
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  role      UserRole
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  shops     UserShop[] // only for CLIENT; ADMIN/MEMBER see everything
+}
+
+model UserShop {
+  userId String
+  shopId String
+  user   User   @relation(fields: [userId], references: [id])
+  shop   Shop   @relation(fields: [shopId], references: [id])
+
+  @@id([userId, shopId])
+}

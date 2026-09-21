@@ -1,0 +1,120 @@
+/* app/app.css */
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  themes: false;
+}
+
+/* ── Dark (Original) ─────────────────────────────────────────────────────── */
+@plugin "daisyui/theme" {
+  name: "dark";
+  default: false;
+  prefersdark: true; /* greift automatisch bei OS-Dark-Mode */
+  color-scheme: dark;
+
+  --color-base-100: #1c1b1b; /* Seiten-Hintergrund */
+  --color-base-200: #2e2c2c; /* Panels / Cards / Inputs */
+  --color-base-300: #403d3d; /* Borders, aktive Tabs, Hover auf Inputs */
+  --color-base-content: #edeaea;
+
+  --color-primary: #9dd1bb;         /* Mint — Hauptaktion */
+  --color-primary-content: #000000; /* IMMER schwarze Schrift auf Mint */
+  --color-secondary: #c5acd3;       /* Lila — Badges / sekundäre Akzente */
+  --color-secondary-content: #000000;
+  --color-accent: #c5acd3;
+  --color-accent-content: #000000;
+  --color-info: #c5acd3;
+  --color-info-content: #000000;
+
+  --color-neutral: #171616;         /* Unsaved-Changes-Bar */
+  --color-neutral-content: #edeaea;
+
+  --color-success: #4cc366;
+  --color-success-content: #0c2513;
+  --color-warning: #e9b24e;
+  --color-warning-content: #271e0a;
+  --color-error: #ff6b6b;
+  --color-error-content: #2d0f0f;
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;  /* Inputs/Buttons 8px */
+  --radius-box: 0.75rem;   /* Cards/Tabellen/Dropdowns 12px */
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* ── Light ───────────────────────────────────────────────────────────────── */
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true; /* Fallback ohne data-theme und ohne OS-Dark-Mode */
+  color-scheme: light;
+
+  --color-base-100: #f6f4f4; /* Seiten-Hintergrund (warmes Hellgrau) */
+  --color-base-200: #ffffff; /* Panels / Cards / Inputs */
+  --color-base-300: #e5e1e1; /* Borders, aktive Tabs */
+  --color-base-content: #1c1b1b;
+
+  --color-primary: #9dd1bb;         /* identisch zu Dark */
+  --color-primary-content: #000000;
+  --color-secondary: #c5acd3;
+  --color-secondary-content: #000000;
+  --color-accent: #c5acd3;
+  --color-accent-content: #000000;
+  --color-info: #c5acd3;
+  --color-info-content: #000000;
+
+  --color-neutral: #1c1b1b;         /* Unsaved-Bar bleibt dunkel (wie Shopify) */
+  --color-neutral-content: #edeaea;
+
+  /* Status-Farben dunkler, damit text-success / -soft-Varianten auf Weiß lesbar sind */
+  --color-success: #23884a;
+  --color-success-content: #ffffff;
+  --color-warning: #a9720f;
+  --color-warning-content: #ffffff;
+  --color-error: #d63c3c;
+  --color-error-content: #ffffff;
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  body {
+    margin: 0;
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+  }
+}
+
+/* Top-Ladebalken (indeterminate) bei laufender Navigation */
+@keyframes app-progress { 0% { left: -35%; } 100% { left: 100%; } }
+.app-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 50; overflow: hidden;
+  background: color-mix(in oklab, var(--color-primary) 18%, transparent);
+}
+.app-progress::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 35%;
+  border-radius: 0 3px 3px 0; background: var(--color-primary);
+  animation: app-progress 0.9s ease-in-out infinite;
+}
+
+/* Kleiner Inline-Spinner (z. B. neben Nav-Link während Pending) */
+@keyframes app-spin { to { transform: rotate(360deg); } }
+.app-spinner {
+  display: inline-block; width: 0.8rem; height: 0.8rem; flex-shrink: 0;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 9999px; opacity: 0.7; animation: app-spin 0.6s linear infinite;
+}

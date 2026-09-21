@@ -16,11 +16,16 @@ Shopify Development Store for all development.
 Never touch a merchant store from a dev session.
 
 ## Commands
-pnpm dev            # shopify app dev (tunnels to the dev store)
+pnpm dev            # shopify app dev --config dev (tunnels to the dev store) – hard-wired to sh-ab-dev
 pnpm test           # vitest, all packages
-pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js
-pnpm db:migrate     # prisma migrate dev
-pnpm deploy         # shopify app deploy (extensions) – ask before running
+pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js (WP3)
+pnpm db:migrate     # prisma migrate dev (local .env = Render external URL)
+pnpm seed:admin <email>   # upsert a dashboard ADMIN (script, not a migration)
+pnpm config:validate      # shopify app config validate for dev and prod
+pnpm deploy         # shopify app deploy --config prod – ask before running
+
+Two app configs: shopify.app.dev.toml (sh-ab-dev) and shopify.app.prod.toml (sh-ab). `shopify app config use dev`
+sets the default; never `shopify app config use prod` on a dev machine, always pass `--config` explicitly.
 
 ## Non-negotiable rules
 - Contracts in docs/plan.md §4 (cart attribute format, metafield schemas, bucketing, exposure payload, editing rule)

@@ -1,0 +1,59 @@
+# sh-ab – production app. Never run `shopify app dev` with this config; deploy with `pnpm deploy` (asks first).
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "REPLACE_WITH_PROD_CLIENT_ID"
+application_url = "https://ab-testing-tool-34of.onrender.com"
+embedded = true
+name = "sh-ab"
+
+[access_scopes]
+scopes = "read_orders"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[app_proxy]
+url = "https://ab-testing-tool-34of.onrender.com/proxy"
+subpath = "sh-ab"
+prefix = "apps"
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/create"
+  topics = [ "orders/create" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/updated"
+  topics = [ "orders/updated" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/refunds/create"
+  topics = [ "refunds/create" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/data_request"
+  compliance_topics = [ "customers/data_request" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/redact"
+  compliance_topics = [ "customers/redact" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/shop/redact"
+  compliance_topics = [ "shop/redact" ]
+
+[auth]
+redirect_urls = [ "https://ab-testing-tool-34of.onrender.com/auth/callback", "https://ab-testing-tool-34of.onrender.com/auth/shopify/callback", "https://ab-testing-tool-34of.onrender.com/api/auth/callback" ]
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = false
