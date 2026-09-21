@@ -1,6 +1,8 @@
-# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v3.8)
+# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v3.9)
 
 *Stand: 18.09.2026, v2 nach Joels Feedback. Baut auf dem Konzept-Doc auf (gleicher Ordner). UI-Design nach `DESIGN.md` (gleicher Ordner – ins Repo kopieren). Ziel: Das MVP so in Arbeitspakete schneiden, dass Claude Code jedes Paket in ein bis drei Sessions umsetzen kann, mit klaren Abnahmekriterien, und dass die Basis für Preis-/Versandtests (Phase 3) schon drin ist.*
+
+**v3.9 (21.09., WP1-Fix):** Polaris zurück – aber nur auf der embedded Merchant-Seite `/app/*`, als Polaris Web Components (`<s-*>` aus dem App-Bridge-Script, kein npm-Polaris), Buttons ausschließlich `variant="secondary"` (weiß, nie primary/schwarz). Dashboard und Login bleiben DESIGN.md-only. ADR-0029, ersetzt ADR-0004 in diesem Punkt.
 
 **v3.8 (21.09., WP1):** 8.5 entschieden (Joel): Visitor-ID Option D – JS-Cookie `_shab_vid` mit localStorage-Spiegel, bei jedem Page Load neu geschrieben (365 Tage), `_shopify_y` komplett raus (ADR-0028 ersetzt ADR-0009). Vertrag 4.4 entsprechend geändert – die einzige sanktionierte Vertragsänderung, weil die Grundlage nicht mehr existiert. Akzeptierter Bias dokumentiert (Wiederkehrer nach > 7 Tagen Safari verdünnen den Lift Richtung null, nie ein falscher Winner). Neue Env-Var `TOKEN_ENCRYPTION_KEY` für die Token-Verschlüsselung.
 
@@ -42,7 +44,7 @@
 | App-Typ | **Public App im Partner Dashboard, unlisted, geht durch den Shopify App Review.** Hybrid: embedded Merchant-Seite `/app` im Shopify-Admin (App Bridge, Session Tokens) + non-embedded Agentur-Dashboard `/dashboard`. Entwicklung und WP1–6 komplett auf einem Development Store. **Install ist offen, Nutzung nicht:** Nach dem Install steht der Shop auf `PENDING`; `ACTIVE` wird er automatisch, wenn die Domain vorher allowlisted war, sonst per Aktivierungscode auf der Merchant-Seite (für den Reviewer und als Notfallweg). | Public Apps sind bis zur Freigabe nur auf Development Stores installierbar – der Review ist Pflicht, kein Produkt-Feature. Ein Install-Gate würde den Reviewer aussperren, deshalb Freischaltung nach dem Install. Nur dieser App-Typ kann Theme App Extension, App Proxy und später Shopify Functions. Dev Stores brauchen **keinen** PCD-Approval; Review + PCD werden zusammen eingereicht (WP-R) und müssen bis WP7 durch sein. Ob der Review "embedded" zwingend verlangt, prüft WP0 (g) – die Hybrid-Lösung ist so oder so die richtige, weil der Merchant eine Seite im Admin braucht und die Client-Ansicht (Phase 2) genau dort hingehört. |
 | Dev-/Prod-Trennung | **Zwei Apps im Partner Dashboard** (`sh-ab-dev`, `sh-ab`), zwei Configs `shopify.app.dev.toml` / `shopify.app.prod.toml`. Eine Datenbank bis WP7; ab dem ersten Kunden-Shop läuft lokale Entwicklung nur noch gegen eine eigene Dev-DB (Docker-Postgres oder zweite Render-Instanz). | `shopify app dev` überschreibt App-URL, Redirect-URLs und damit Proxy und Webhooks der verlinkten App – mit einer App bricht Prod bei jeder Dev-Session. PCD-Antrag für die Prod-App. |
 | Fallback | **Custom-Distribution-App pro Kunde** (Partner Dashboard, ein Store pro App, kein Review) mit derselben Codebase; die App muss dafür mehrere Credentials (API Key/Secret pro App) für Webhook-HMAC und Proxy-Signatur können. | Nur wenn Review oder PCD bis WP7 nicht durch sind. Theme App Extension und App Proxy funktionieren dort genauso – im Gegensatz zur Admin-Custom-App ("Develop apps"), die beides nicht kann. Kostet: pro Kunde eine App anlegen, Extension deployen, Install-Link. **Nicht als Hauptweg**, sonst pflegen wir acht Apps. |
-| App-Framework | Shopify CLI Template (React Router v7, Framework-Mode) – **Polaris entfernt**, Tailwind v4 + daisyUI 5 nach DESIGN.md. App Bridge (CDN-Script) bleibt, aber nur auf den Embedded-Routen `/app/*`. | OAuth, Session-Storage, Webhook-Registrierung, Extension-Deploy sind vorverdrahtet. DESIGN.md nutzt denselben Router – passt exakt. |
+| App-Framework | Shopify CLI Template (React Router v7, Framework-Mode). **Zwei UI-Welten, nach Route getrennt:** `/app/*` (embedded Merchant-Seite) = **Polaris Web Components** (`<s-*>`, geliefert vom App-Bridge-CDN-Script, kein npm-Polaris), Buttons nur `variant="secondary"` (weiß), nie `primary`; alles andere (`/dashboard/*`, `/login*`) = Tailwind v4 + daisyUI 5 nach DESIGN.md, ohne Polaris. App Bridge nur auf `/app/*`. (ADR-0029) | OAuth, Session-Storage, Webhook-Registrierung, Extension-Deploy sind vorverdrahtet. DESIGN.md nutzt denselben Router – passt exakt. |
 | Dashboard | Non-embedded, eigener Tab, Routen unter `/dashboard` in derselben App (die embedded Merchant-Seite `/app` ist davon getrennt und minimal). Login mit Google (OAuth direkt), E-Mail-Allowlist per Einladung. Rollen `ADMIN`, `MEMBER` (intern) und `CLIENT` (read-only auf die eigenen Shops – Datenmodell und Guards in Phase 1, die Client-Ansicht in Phase 2). **UI-Sprache Englisch.** | Multi-Client-Übersicht geht nur non-embedded (embedded = Kontext eines einzelnen Shops). Eigenes Design liegt vor. |
 | Datenbank | Render Postgres via Prisma, Region Frankfurt | Joels Entscheidung. App und DB im selben Render-Workspace und derselben Region → interne Connection-URL (privates Netz, kein SSL nötig). Externe URL nur für lokale Entwicklung und Migrationen vom Laptop. |
 | Hosting | **Render Web Service** (Node-Runtime, Auto-Deploy aus GitHub), Region Frankfurt, Plan **Starter** ab WP1 | Joels Entscheidung: alles auf Render, eine Plattform. Der Free-Plan schläft nach 15 min Inaktivität ein (Cold Start 30 s+) – für Webhooks und Beacons unbrauchbar, deshalb Starter von Anfang an. Der erste Deploy ist Abnahmekriterium in WP1. Cron über Render Cron Jobs. Details §8.1. |
@@ -83,7 +85,7 @@ sh-ab/
 │   └── adr/                      # Historie: eine Datei pro Entscheidung, Format in adr/README.md
 ├── shopify.app.toml              # Scopes, Webhooks, App Proxy, embedded=true (Merchant-Seite), Dashboard läuft außerhalb
 ├── render.yaml                   # Render Blueprint: Web Service, Cron Jobs, Env-Vars (Secret-Werte im Render-Dashboard)
-├── app/                          # React Router App (Shopify Template, ohne Polaris)
+├── app/                          # React Router App (Shopify Template); app.* = Polaris Web Components, Rest = DESIGN.md
 │   ├── app.css                   # Theme-CSS aus DESIGN.md §2, 1:1
 │   ├── components/               # UI-Bausteine nach DESIGN.md (Shell, Table, KPI, Form, Alert, Skeleton, CodeField)
 │   ├── routes/
@@ -471,7 +473,7 @@ Siehe Checkliste in §7. Claude Code parallel: Repo initialisieren, `CLAUDE.md` 
 ### WP1 – App-Skeleton, OAuth, Design-Shell, Deploy (2–3 Tage)
 
 **Inhalt**
-- `shopify app init` mit React Router Template, pnpm, ein Package (kein Workspace). **Polaris entfernen**, App Bridge behalten. `embedded = true` bleibt; die embedded Route `/app` ist die Merchant-Seite (Session-Token-Auth aus dem Template), `/dashboard/*` läuft non-embedded im eigenen Tab und nutzt die Google-Session, nie den Shopify-Kontext.
+- `shopify app init` mit React Router Template, pnpm, ein Package (kein Workspace). **npm-Polaris entfernen**, App Bridge behalten – die Merchant-Seite `/app/*` nutzt die Polaris Web Components (`<s-page>`, `<s-section>`, `<s-text-field>`, `<s-button variant="secondary">`, `<s-badge>`, `<s-banner>`) aus dem App-Bridge-Script, **niemals `variant="primary"`**; Tailwind/daisyUI wird auf `/app/*` nicht geladen (ADR-0029). `embedded = true` bleibt; die embedded Route `/app` ist die Merchant-Seite (Session-Token-Auth aus dem Template), `/dashboard/*` läuft non-embedded im eigenen Tab und nutzt die Google-Session, nie den Shopify-Kontext.
 - Zwei App-Configs: `shopify app config link` für `sh-ab-dev` (→ `shopify.app.dev.toml`, für `shopify app dev`) und `sh-ab` (→ `shopify.app.prod.toml`, für `deploy`). `shopify app dev` läuft nie gegen die Prod-App.
 - Tailwind v4 + daisyUI 5 einrichten, `app.css` 1:1 aus DESIGN.md §2, Inter laden. App-Shell (Sidebar, Header, Ladebalken) nach DESIGN.md bauen – mit Platzhalter-Seiten.
 - Prisma auf Render Postgres (in Prod die interne URL als Env-Var im Render-Dashboard, lokal die externe URL mit `sslmode=require` in `.env`)
@@ -487,7 +489,8 @@ Siehe Checkliste in §7. Claude Code parallel: Repo initialisieren, `CLAUDE.md` 
 - Dev Store steht als `ALLOWLISTED` im Dashboard → Install per Install-Link endet auf `/app` im Admin mit Status `ACTIVE`; ein zweiter Dev Store ohne Eintrag landet auf `PENDING`, wird per Aktivierungscode `ACTIVE`, mit falschem Code nicht
 - `shopify app dev` läuft gegen `sh-ab-dev`; App-URL und Proxy der Prod-App im Partner Dashboard bleiben danach unverändert
 - Login mit einer Allowlist-Mail funktioniert, mit einer fremden Gmail nicht
-- Shell sieht aus wie DESIGN.md (Dark und Light), keine Polaris-Reste im Bundle
+- Shell sieht aus wie DESIGN.md (Dark und Light); kein `@shopify/polaris` in `package.json`, keine `<s-*>`-Elemente unter `/dashboard` oder `/login`
+- `/app` besteht nur aus Polaris Web Components, kein Tailwind-Klassenname, kein schwarzer Button (Screenshot PENDING + ACTIVE)
 - Testbestellung im Dev Store → `orders/create` in `WebhookEvent` mit HMAC ok
 - App deinstallieren → `Shop.status = UNINSTALLED`
 - **Deploy auf Render läuft durch**: Auto-Deploy aus GitHub, Health-Check grün, Webhook-Roundtrip in Prod < 5 s. Wenn die Node-Runtime nicht sauber baut: Docker-Runtime mit dem Template-Dockerfile – nicht tagelang festbeißen
@@ -702,7 +705,7 @@ we are, docs/DESIGN.md for every pixel of UI. Start every session with rahmen.md
 Contracts in docs/plan.md section 4 are frozen.
 
 ## Stack
-React Router v7 (Shopify CLI template, Polaris removed; App Bridge only on the embedded merchant route /app, the agency dashboard under /dashboard is non-embedded) · Tailwind v4 + daisyUI 5
+React Router v7 (Shopify CLI template). Two UI worlds split by route: the embedded merchant page /app/* uses Polaris Web Components (`<s-*>` from the App Bridge CDN script, no npm Polaris, buttons only `variant="secondary"` – never primary); the non-embedded agency dashboard under /dashboard uses Tailwind v4 + daisyUI 5
 per DESIGN.md · Prisma + Render Postgres · Google OAuth (arctic, no Firebase) for the dashboard · single package, no workspaces · Vitest ·
 esbuild for the snippet · CodeMirror 6 for the JS/CSS fields (the only UI dependency beyond DESIGN.md's stack).
 Hosting: Render Web Service (Frankfurt, auto-deploy from GitHub, defined in render.yaml); cron via Render Cron Jobs hitting secret-protected /jobs/* endpoints.
@@ -719,9 +722,11 @@ pnpm deploy         # shopify app deploy (extensions) – ask before running
 ## Non-negotiable rules
 - Contracts in docs/plan.md §4 (cart attribute format, metafield schemas, bucketing, exposure payload, editing rule)
   never change. If a task seems to require changing them, stop and ask.
-- UI: follow docs/DESIGN.md strictly – its tokens, classes and recipes. No Polaris, shadcn, MUI, Radix, icon or chart
+- UI outside /app/*: follow docs/DESIGN.md strictly – its tokens, classes and recipes. No Polaris, shadcn, MUI, Radix, icon or chart
   libraries. All UI text in English (this overrides DESIGN.md §8, which says German). Numbers and currency formatted
   `de-DE` (1.234,56 €) unless docs/plan.md §8 says otherwise.
+- UI on /app/* (embedded merchant page): Polaris Web Components only (`<s-page>`, `<s-section>`, `<s-button>` …),
+  no Tailwind/daisyUI, no DESIGN.md components, and never `<s-button variant="primary">` – secondary (white) only.
 - Money always comes from `*_price_set.shop_money.amount`. Never `total_price`, never presentment currency.
 - Webhook handlers are idempotent on X-Shopify-Webhook-Id: persist the (PII-stripped) event, return 200, process
   inline; on failure record the error on WebhookEvent – /jobs/retry-webhooks picks it up. There is no queue. Keep
@@ -783,7 +788,7 @@ pnpm deploy         # shopify app deploy (extensions) – ask before running
 
 ## 8. Offene Entscheidungen
 
-Entschieden: Framework (Template, non-embedded, kein Polaris), Auth (Google OAuth direkt), Namespace (`$app:sh_ab`), Editor im UI (ja), UI-Sprache (Englisch), Hosting (8.1), Consent (8.2), Zahlenformat (8.3), Pooling (8.4), Visitor-ID (8.5, v3.8), Retention (8.6). Nichts mehr offen.
+Entschieden: Framework (Template; Polaris Web Components nur auf `/app/*`, Dashboard ohne Polaris – ADR-0029), Auth (Google OAuth direkt), Namespace (`$app:sh_ab`), Editor im UI (ja), UI-Sprache (Englisch), Hosting (8.1), Consent (8.2), Zahlenformat (8.3), Pooling (8.4), Visitor-ID (8.5, v3.8), Retention (8.6). Nichts mehr offen.
 
 **8.1 Hosting – entschieden: Render Web Service (v3.3, ersetzt Firebase App Hosting aus v3).** Alles auf einer Plattform: App, Postgres und Cron im selben Render-Workspace in Frankfurt, DB über die interne URL. Kein zweites Cloud-Projekt, keine Blaze-Kreditkarte, kein Cloud-Run-Cold-Start. Was das kostet: Der Free-Plan schläft nach 15 min ohne Traffic ein und braucht 30 s+ zum Aufwachen – Shopify-Webhooks laufen dann in den 5-s-Timeout (Shopify retried zwar, aber ein Dev Store hat stundenlang keinen Traffic, Einschlafen wäre der Normalfall). Deshalb **Starter (~7 $/Monat) ab WP1**, keine Free-Phase. Starter = eine Instanz, kein Autoscaling – reicht für Phase 1 locker (Beacons sind winzige Requests, Webhooks kommen pro Order). Mehr Instanzen bei Bedarf manuell, dann greift §8.4 B. Cron: vier Render Cron Jobs – daily-stats, reconcile, retry-webhooks, cleanup – (Docker-Image `curlimages/curl`, je min. 1 $/Monat), die die secret-geschützten `/jobs/*`-Endpoints aufrufen – die Endpoints bleiben, damit man Jobs auch manuell anstoßen kann. Alternative ohne Extra-Services: `node-cron` im App-Prozess; geht nur, solange es genau eine Instanz gibt. Firebase entfällt komplett (v3.4: Google OAuth direkt).
 
