@@ -17,6 +17,7 @@ Never touch a merchant store from a dev session.
 
 ## Commands
 pnpm dev            # shopify app dev --config dev (tunnels to the dev store) – hard-wired to sh-ab-dev
+pnpm dev:dashboard  # second local server on http://localhost:3000 – the only origin Google OAuth accepts locally
 pnpm test           # vitest, all packages
 pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js (WP3)
 pnpm db:migrate     # prisma migrate dev (local .env = Render external URL)

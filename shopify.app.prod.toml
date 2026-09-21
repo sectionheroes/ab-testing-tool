@@ -1,15 +1,19 @@
 # sh-ab – production app. Never run `shopify app dev` with this config; deploy with `pnpm deploy` (asks first).
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "REPLACE_WITH_PROD_CLIENT_ID"
+client_id = "61a43501f511e701b7d8ea84efe12bda"
 application_url = "https://ab-testing-tool-34of.onrender.com"
 embedded = true
 name = "sh-ab"
 
 [access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_orders"
 optional_scopes = [ ]
 use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [ ]
 
 [app_proxy]
 url = "https://ab-testing-tool-34of.onrender.com/proxy"
@@ -50,9 +54,6 @@ api_version = "2026-07"
   [[webhooks.subscriptions]]
   uri = "/webhooks/shop/redact"
   compliance_topics = [ "shop/redact" ]
-
-[auth]
-redirect_urls = [ "https://ab-testing-tool-34of.onrender.com/auth/callback", "https://ab-testing-tool-34of.onrender.com/auth/shopify/callback", "https://ab-testing-tool-34of.onrender.com/api/auth/callback" ]
 
 [build]
 include_config_on_deploy = true

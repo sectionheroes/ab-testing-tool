@@ -5,6 +5,7 @@
   "scripts": {
     "build": "prisma generate && react-router build",
     "dev": "shopify app dev --config dev",
+    "dev:dashboard": "PORT=3000 react-router dev",
     "deploy": "shopify app deploy --config prod",
     "config:validate": "shopify app config validate --config dev && shopify app config validate --config prod",
     "start": "prisma migrate deploy && NODE_OPTIONS=\"--import ./instrument.server.mjs\" react-router-serve ./build/server/index.js",
