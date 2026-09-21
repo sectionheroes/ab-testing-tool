@@ -1,6 +1,6 @@
 # ADR-0009: Visitor-ID: `_shopify_y` mit Fallback `_shab_vid`
 
-Datum: 2026-09-20 · Status: entschieden
+Datum: 2026-09-20 · Status: ersetzt durch ADR-0028
 
 ## Kontext
 Safari ITP kappt per JS gesetzte Cookies auf 7 Tage. Ein eigener JS-Cookie hält bei ~30 % des Mobile-Traffics keine 14 Tage – Wiederkehrer würden neu gebucketed. Shopifys Analytics-Cookie `_shopify_y` galt als per HTTP gesetzt und damit ITP-fest.
