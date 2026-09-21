@@ -8,7 +8,7 @@ we are, docs/DESIGN.md for every pixel of UI. Start every session with rahmen.md
 Contracts in docs/plan.md section 4 are frozen.
 
 ## Stack
-React Router v7 (Shopify CLI template, Polaris removed; App Bridge only on the embedded merchant route /app, the agency dashboard under /dashboard is non-embedded) · Tailwind v4 + daisyUI 5
+React Router v7 (Shopify CLI template). Two UI worlds split by route: the embedded merchant page /app/* uses Polaris Web Components (`<s-*>` from the App Bridge CDN script, no npm Polaris, buttons only `variant="secondary"` – never primary); the non-embedded agency dashboard under /dashboard uses Tailwind v4 + daisyUI 5
 per DESIGN.md · Prisma + Render Postgres · Google OAuth (arctic, no Firebase) for the dashboard · single package, no workspaces · Vitest ·
 esbuild for the snippet · CodeMirror 6 for the JS/CSS fields (the only UI dependency beyond DESIGN.md's stack).
 Hosting: Render Web Service (Frankfurt, auto-deploy from GitHub, defined in render.yaml); cron via Render Cron Jobs hitting secret-protected /jobs/* endpoints.
@@ -16,18 +16,26 @@ Shopify Development Store for all development.
 Never touch a merchant store from a dev session.
 
 ## Commands
-pnpm dev            # shopify app dev (tunnels to the dev store)
+pnpm dev            # shopify app dev --config dev (tunnels to the dev store) – hard-wired to sh-ab-dev
+pnpm dev:dashboard  # second local server on http://localhost:3000 – the only origin Google OAuth accepts locally
 pnpm test           # vitest, all packages
-pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js
-pnpm db:migrate     # prisma migrate dev
-pnpm deploy         # shopify app deploy (extensions) – ask before running
+pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js (WP3)
+pnpm db:migrate     # prisma migrate dev (local .env = Render external URL)
+pnpm seed:admin <email>   # upsert a dashboard ADMIN (script, not a migration)
+pnpm config:validate      # shopify app config validate for dev and prod
+pnpm deploy         # shopify app deploy --config prod – ask before running
+
+Two app configs: shopify.app.dev.toml (sh-ab-dev) and shopify.app.prod.toml (sh-ab). `shopify app config use dev`
+sets the default; never `shopify app config use prod` on a dev machine, always pass `--config` explicitly.
 
 ## Non-negotiable rules
 - Contracts in docs/plan.md §4 (cart attribute format, metafield schemas, bucketing, exposure payload, editing rule)
   never change. If a task seems to require changing them, stop and ask.
-- UI: follow docs/DESIGN.md strictly – its tokens, classes and recipes. No Polaris, shadcn, MUI, Radix, icon or chart
+- UI outside /app/*: follow docs/DESIGN.md strictly – its tokens, classes and recipes. No Polaris, shadcn, MUI, Radix, icon or chart
   libraries. All UI text in English (this overrides DESIGN.md §8, which says German). Numbers and currency formatted
   `de-DE` (1.234,56 €) unless docs/plan.md §8 says otherwise.
+- UI on /app/* (embedded merchant page): Polaris Web Components only (`<s-page>`, `<s-section>`, `<s-button>` …),
+  no Tailwind/daisyUI, no DESIGN.md components, and never `<s-button variant="primary">` – secondary (white) only.
 - Money always comes from `*_price_set.shop_money.amount`. Never `total_price`, never presentment currency.
 - Webhook handlers are idempotent on X-Shopify-Webhook-Id: persist the (PII-stripped) event, return 200, process
   inline; on failure record the error on WebhookEvent – /jobs/retry-webhooks picks it up. There is no queue. Keep

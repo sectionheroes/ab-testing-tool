@@ -17,3 +17,14 @@ coverage/
 
 # os
 .DS_Store
+
+# build
+/.cache
+/build
+/public/build/
+/public/_dev
+/extensions/*/dist
+.react-router/
+.shopify.lock
+*.sqlite
+*.sqlite-journal

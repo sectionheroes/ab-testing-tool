@@ -142,4 +142,4 @@ Roter Badge am Experiment bei SRM p < 0,001 · keine Exposures in den letzten 24
 ## Offen
 
 - [ ] Pseudonymisierung bei `shop/redact` (§3.3) juristisch klären – Notiz in `plan.md` 8.6
-- [ ] Visitor-ID: `_shopify_y` wird seit 01.01.2026 nicht mehr gesetzt und App-Proxy-Responses verlieren `Set-Cookie` (ADR-0099 e/f) – `plan.md` 8.5 muss von Joel neu entschieden werden, bevor WP3 startet
+- [x] Visitor-ID: entschieden 21.09.2026 (ADR-0028, `plan.md` 8.5 Option D – JS-Cookie mit localStorage-Spiegel, akzeptierter Bias Richtung null)

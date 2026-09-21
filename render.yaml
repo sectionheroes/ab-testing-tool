@@ -1,0 +1,46 @@
+# Render Blueprint – documentation and fallback. The web service already exists (created manually,
+# auto-deploys `main`); do NOT connect this file as a Blueprint, that would create a second service.
+# Cron jobs (retry-webhooks, daily-stats, reconcile, cleanup) are added in WP4/WP6.
+services:
+  - type: web
+    name: ab-testing-tool
+    runtime: node
+    region: frankfurt
+    plan: starter
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: SHOPIFY_API_KEY
+        sync: false
+      - key: SHOPIFY_API_SECRET
+        sync: false
+      - key: SHOPIFY_APP_URL
+        sync: false
+      - key: SCOPES
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: ACTIVATION_CODE
+        sync: false
+      - key: JOBS_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: SLACK_WEBHOOK_URL
+        sync: false
+      - key: NODE_ENV
+        sync: false
+      - key: WEBHOOK_STORE_PAYLOAD
+        sync: false

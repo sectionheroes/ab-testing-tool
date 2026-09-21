@@ -11,6 +11,7 @@ diese Tokens, Klassen und Rezepte.** Nicht improvisieren, keine anderen UI-Libra
 - **React** (JSX, kein TypeScript nötig) + **React Router v7** (Framework-Mode)
 - **Tailwind CSS v4** (`@tailwindcss/vite`) + **daisyUI 5** (`@plugin "daisyui"`)
 - **Kein** Polaris, kein shadcn, kein MUI, keine Icon-Library — Icons sind kleine Inline-SVGs
+- Gilt für das Dashboard und den Login. Die embedded Shopify-Merchant-Seite `/app/*` ist ausgenommen: dort ausschließlich Polaris Web Components, keine DESIGN.md-Bausteine (siehe `docs/adr/0029`).
   (24er-Viewbox, `stroke="currentColor" strokeWidth="2"`, 15–16px groß)
 - Charts: handgeschriebene SVGs (Area, Sparkline, Donut), keine Chart-Library
 - Font: **Inter** (Google Fonts laden), Fallback `system-ui`

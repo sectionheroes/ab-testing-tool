@@ -1,6 +1,6 @@
 # ADR-0004: App-Framework: Shopify CLI Template (React Router v7) ohne Polaris, Tailwind v4 + daisyUI 5
 
-Datum: 2026-09-20 · Status: entschieden
+Datum: 2026-09-20 · Status: entschieden · Punkt "Polaris entfernt" ersetzt durch ADR-0029 (Polaris Web Components auf `/app/*`; Dashboard weiterhin ohne Polaris)
 
 ## Kontext
 OAuth, Session-Storage, Webhook-Registrierung und Extension-Deploy sollen nicht selbst gebaut werden. Das Dashboard hat ein eigenes Design (DESIGN.md), das nicht nach Polaris aussieht.

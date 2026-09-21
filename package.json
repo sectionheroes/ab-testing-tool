@@ -1,0 +1,74 @@
+{
+  "name": "sh-ab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "prisma generate && react-router build",
+    "dev": "shopify app dev --config dev",
+    "dev:dashboard": "PORT=3000 react-router dev",
+    "deploy": "shopify app deploy --config prod",
+    "config:validate": "shopify app config validate --config dev && shopify app config validate --config prod",
+    "start": "prisma migrate deploy && NODE_OPTIONS=\"--import ./instrument.server.mjs\" react-router-serve ./build/server/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "seed:admin": "tsx scripts/seed-admin.ts",
+    "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "prisma": "prisma",
+    "shopify": "shopify"
+  },
+  "engines": {
+    "node": ">=22.12 <27"
+  },
+  "packageManager": "pnpm@12.5.1",
+  "dependencies": {
+    "@prisma/client": "^6.16.3",
+    "@react-router/dev": "7.18.2",
+    "@react-router/fs-routes": "7.18.2",
+    "@react-router/node": "7.18.2",
+    "@react-router/serve": "7.18.2",
+    "@sentry/react-router": "^10",
+    "@shopify/shopify-app-react-router": "^1.2.1",
+    "@shopify/shopify-app-session-storage": "^5.0.1",
+    "arctic": "^3",
+    "isbot": "^5.1.31",
+    "prisma": "^6.16.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router": "7.18.2",
+    "vite-tsconfig-paths": "^5.1.4"
+  },
+  "devDependencies": {
+    "@shopify/api-codegen-preset": "^1.2.0",
+    "@shopify/cli": "4.8.0",
+    "@shopify/polaris-types": "^1.1.0",
+    "@tailwindcss/vite": "^4",
+    "@types/eslint": "^9.6.1",
+    "@types/node": "^22.18.8",
+    "@types/react": "^18.3.25",
+    "@types/react-dom": "^18.3.7",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "daisyui": "^5",
+    "eslint": "^8.57.1",
+    "eslint-import-resolver-typescript": "^3.10.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "graphql-config": "^5.1.1",
+    "prettier": "^3.6.2",
+    "tailwindcss": "^4",
+    "tsx": "^4",
+    "typescript": "^5.9.3",
+    "vite": "^6.3.6",
+    "vitest": "^3"
+  },
+  "pnpm": {
+    "overrides": {
+      "qs": "^6.16.0"
+    }
+  }
+}
