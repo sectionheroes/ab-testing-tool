@@ -75,3 +75,6 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
 - Add a visual/WYSIWYG editor.
 - Add dependencies to lib/snippet (hand-rolled only, size budget).
 - Run `shopify app dev` against the production app config.
+- Run `prisma migrate reset`, `prisma db push --force-reset`, `DROP`/`TRUNCATE`, or any command that deletes rows or tables
+  against any database. A missing `_prisma_migrations` table does not mean the database is empty – inspect row counts first
+  and report what you find before touching anything.
