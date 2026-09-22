@@ -361,6 +361,8 @@ Beispiel: pdp-reviews-above-price:b,free-shipping-bar:a
 
 Namespace app-owned: `$app:sh_ab`, Key `client`, Typ `json`. In der Theme App Extension lesbar als `app.metafields.sh_ab.client`.
 
+> Fußnote (WP3 3a, ADR-0030): Geschrieben wird auf die **AppInstallation** (`ownerId = currentAppInstallation.id`) mit dem einfachen Namespace `sh_ab` – nur so liefert Liquid den Wert unter `app.metafields.sh_ab.client`; mit `$app:`-Präfix hieße der Pfad `app.metafields["$app:sh_ab"].client`. Der Liquid-Pfad und das Schema bleiben wie hier definiert.
+
 ```json
 {
   "v": 1,

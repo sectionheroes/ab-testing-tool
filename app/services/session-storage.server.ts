@@ -17,7 +17,11 @@ import { decrypt, encrypt } from "./crypto.server";
  * not bounce through OAuth forever.
  */
 export class ShopSessionStorage implements SessionStorage {
-  constructor(private readonly db: PrismaClient) {}
+  /** onActivated fires after a row turned ACTIVE here (allowlisted install / reinstall) – the first config write (WP3). */
+  constructor(
+    private readonly db: PrismaClient,
+    private readonly onActivated?: (shopId: string) => Promise<void>,
+  ) {}
 
   async storeSession(session: Session): Promise<boolean> {
     if (session.isOnline) throw new Error("ShopSessionStorage stores offline sessions only");
@@ -56,6 +60,9 @@ export class ShopSessionStorage implements SessionStorage {
         activatedAt: status === "ACTIVE" && !existing.activatedAt ? new Date() : existing.activatedAt,
       },
     });
+    if (status === "ACTIVE" && existing.status !== "ACTIVE" && this.onActivated) {
+      await this.onActivated(existing.id).catch((err) => console.error(`[session] onActivated failed for ${domain}`, err));
+    }
     return true;
   }
 

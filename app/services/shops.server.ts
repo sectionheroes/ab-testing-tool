@@ -3,6 +3,7 @@ import prisma from "../db.server";
 import { env } from "../env.server";
 import { safeEqual } from "./crypto.server";
 import { logAudit } from "./audit.server";
+import { syncOnActivation } from "./metafields.server";
 
 export class ShopError extends Error {
   constructor(
@@ -56,6 +57,7 @@ export async function activateShop(id: string, actor: string): Promise<Shop> {
     data: { status: "ACTIVE", activatedAt: shop.activatedAt ?? new Date() },
   });
   await logAudit({ shopId: id, actor, action: "STATUS_CHANGED", diff: { from: "PENDING", to: "ACTIVE" } });
+  await syncOnActivation(id); // first config write happens here – never for a PENDING shop
   return updated;
 }
 

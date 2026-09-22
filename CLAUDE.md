@@ -12,16 +12,20 @@ React Router v7 (Shopify CLI template). Two UI worlds split by route: the embedd
 per DESIGN.md · Prisma + Render Postgres · Google OAuth (arctic, no Firebase) for the dashboard · single package, no workspaces · Vitest ·
 esbuild for the snippet · CodeMirror 6 for the JS/CSS fields (the only UI dependency beyond DESIGN.md's stack).
 Hosting: Render Web Service (Frankfurt, auto-deploy from GitHub, defined in render.yaml); cron via Render Cron Jobs hitting secret-protected /jobs/* endpoints.
-Shopify Development Store for all development.
+Shopify Development Stores (sh-ab-testing-one/-two) for all development; local Homebrew Postgres `sh_ab_dev` for the
+local DB. The Render database is production only – never point a local .env at it.
 Never touch a merchant store from a dev session.
 
 ## Commands
 pnpm dev            # shopify app dev --config dev (tunnels to the dev store) – hard-wired to sh-ab-dev
 pnpm dev:dashboard  # second local server on http://localhost:3000 – the only origin Google OAuth accepts locally
 pnpm test           # vitest, all packages
-pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js (WP3)
-pnpm db:migrate     # prisma migrate dev (local .env = Render external URL)
+pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js, prints raw + gzip, fails above 8 KB gzip; then deploy --config dev
+pnpm db:migrate     # prisma migrate dev against the local Postgres (.env = postgresql://<user>@localhost:5432/sh_ab_dev)
 pnpm seed:admin <email>   # upsert a dashboard ADMIN (script, not a migration)
+pnpm sync:config <shop>   # reserve `server` + rebuild/write the `client` metafield from RUNNING experiments
+pnpm experiment:status <shop> <key> <RUNNING|PAUSED|ENDED> [decision]   # status change via the service layer (writes the metafield)
+pnpm variant:code <shop> <key> <variant> --js <file> --css <file>       # code save via the service layer (hotfix on RUNNING)
 pnpm config:validate      # shopify app config validate for dev and prod
 pnpm deploy         # shopify app deploy --config prod – ask before running
 

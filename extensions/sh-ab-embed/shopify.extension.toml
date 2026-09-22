@@ -1,0 +1,6 @@
+# Theme app extension "sh-ab-embed" (ADR-0012). One app embed block, blocks/embed.liquid (handle `embed` – the theme
+# editor deep link in app/services/shops.server.ts is hard-wired to it). App embeds are inactive until the merchant
+# turns them on in the theme editor; nothing renders on a storefront before that (app review requirement).
+name = "sh-ab-embed"
+type = "theme"
+uid = "60867eed-0a5d-ed6a-c90d-101b05a852ec56423ab6"

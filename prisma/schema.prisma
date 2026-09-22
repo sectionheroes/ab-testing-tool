@@ -90,6 +90,7 @@ model Shop {
   orders         Order[]
   dailyStats     DailyStat[]
   reconciliation ReconciliationRun[]
+  snippetErrors  SnippetError[]
 }
 
 model Experiment {
@@ -182,6 +183,23 @@ model Exposure {
   @@index([experimentId, firstSeenAt])
   @@index([customerId])
   @@index([shopId, firstSeenAt])
+}
+
+// Errors the snippet reports via /proxy/err (a variant's JS threw – original was shown, no exposure). Inserts are capped per
+// shop and hour in exposures.server.ts; Sentry gets one event per (shop, experiment, message) per 10 min. Retention: WP6.
+model SnippetError {
+  id            String   @id @default(cuid())
+  shopId        String
+  shop          Shop     @relation(fields: [shopId], references: [id])
+  experimentKey String
+  variantKey    String
+  message       String
+  stack         String?
+  url           String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([shopId, createdAt])
 }
 
 model Order {

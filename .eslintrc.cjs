@@ -19,7 +19,7 @@ module.exports = {
     commonjs: true,
     es6: true,
   },
-  ignorePatterns: ["!**/.server", "!**/.client"],
+  ignorePatterns: ["!**/.server", "!**/.client", "extensions/*/assets/*.js"], // built snippet is minified output
 
   // Base config
   extends: ["eslint:recommended"],
@@ -76,6 +76,20 @@ module.exports = {
       ],
     },
 
+    // Boundary (plan §2): lib/* is standalone – never imports app/. app/ may use lib/stats, never the snippet or CLI.
+    {
+      files: ["lib/**/*.{ts,tsx}"],
+      rules: {
+        "no-restricted-imports": ["error", { patterns: [{ group: ["**/app/**", "~/**"], message: "lib/ must not import from app/ (plan §2)." }] }],
+      },
+    },
+    {
+      files: ["app/**/*.{ts,tsx}"],
+      rules: {
+        "no-restricted-imports": ["error", { patterns: [{ group: ["**/lib/snippet/**", "**/lib/cli/**"], message: "app/ must not import the snippet or the CLI (plan §2)." }] }],
+      },
+    },
+
     // Node
     {
       files: [
@@ -84,6 +98,8 @@ module.exports = {
         ".graphqlrc.{js,ts}",
         "shopify.server.{js,ts}",
         "**/*.server.{js,ts}",
+        "lib/snippet/build.ts",
+        "scripts/**/*.ts",
       ],
       env: {
         node: true,
