@@ -20,7 +20,7 @@ Never touch a merchant store from a dev session.
 pnpm dev            # shopify app dev --config dev (tunnels to the dev store) – hard-wired to sh-ab-dev
 pnpm dev:dashboard  # second local server on http://localhost:3000 – the only origin Google OAuth accepts locally
 pnpm test           # vitest, all packages
-pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js (WP3)
+pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js, prints raw + gzip, fails above 8 KB gzip; then deploy --config dev
 pnpm db:migrate     # prisma migrate dev against the local Postgres (.env = postgresql://<user>@localhost:5432/sh_ab_dev)
 pnpm seed:admin <email>   # upsert a dashboard ADMIN (script, not a migration)
 pnpm sync:config <shop>   # reserve `server` + rebuild/write the `client` metafield from RUNNING experiments
