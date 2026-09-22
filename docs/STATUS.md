@@ -2,7 +2,7 @@
 Stand: 2026-09-22
 
 ## Aktuell
-WP: **WP2 umgesetzt**, Branch `wp2-ingestion`, PR offen → `main`. Offen im PR nur noch die Multi-Currency-Fixture (braucht Markt Germany/EUR + Shopify Payments Test-Modus auf Store one, Joel richtet ein). Nächstes WP: WP3 (Metafield-Config, Theme App Extension, Snippet).
+WP: **WP2 umgesetzt**, Branch `wp2-ingestion`, PR #2 offen → `main`, alle 13 Abnahmepunkte pass. Nächstes WP: WP3 (Metafield-Config, Theme App Extension, Snippet).
 
 ## Fertig (WP2)
 - Prisma-Schema komplett (plan §3): Experiment, Variant, ExperimentResult, Exposure, Order, OrderLineItem, OrderAttribution, Refund, DailyStat, ReconciliationRun, ApiToken + Enums, `Decimal(12,2)`, Indizes `(experimentId,variantId)`, `(orderId)`, `(experimentId,firstSeenAt)`, `Exposure(customerId)`, `WebhookEvent(error)`. Migration `20260922_wp2_data_model` (via `migrate diff --from-schema-datasource` + `migrate deploy`), normalisiert nebenbei alte `topic`-Werte.
@@ -18,6 +18,7 @@ WP: **WP2 umgesetzt**, Branch `wp2-ingestion`, PR offen → `main`. Offen im PR 
 - **DB war leer.** Beim Start dieser Session hatte die Render-DB weder `_prisma_migrations` noch Shop-/User-Rows (WP1-Daten weg, Ursache unbekannt – vermutlich Reset/Neuanlage). Baseline per `prisma migrate resolve --applied 20260921_wp1_init`, dann `migrate deploy`. Admin `hello@sectionheroes.de` neu geseedet, beide Dev Stores neu allowlisted/installiert.
 - **Refund-Betrag:** `refunds/create` liefert in `transactions[]` nur `amount`+`currency` (Presentment), kein `amount_set`. Reihenfolge in `refundAmount()`: `transactions[].amount_set.shop_money` wenn vorhanden → Admin GraphQL `refund.totalRefundedSet.shopMoney` (Dev-MCP-validiert) → Summe aus `refund_line_items` + `refund_shipping_lines` − `order_adjustments` (Test gegen die echte Fixture: 100,00). Live auf dem Dev Store lief der GraphQL-Pfad.
 - **Dev-Store-Payloads sind PII-redigiert** (keine PCD-Freigabe der Dev-App): kein email/name/address. Deshalb `orders-create.pii-full.json` als synthetische Voll-PII-Fixture für den `stripPii`-Test.
+- Store one hat jetzt Shopify Payments Test-Modus + Markt Canada/CAD (Multi-Currency-Fixture #1005: 855,00 CAD Presentment = 610,95 USD shop_money; Shopify rechnet den CAD-Preis zurück, Line 580,22 statt 600,00 USD).
 - Test-Orders vom Bogus Gateway haben `test: true` → `Order.isTest = true`; nach 4.8 zählen sie nicht. Für WP4-Tests auf dem Dev Store also `isTest` bewusst ignorieren oder echte Zahlung simulieren.
 - `shop/redact` wird nur über `Shop.status !== UNINSTALLED` als „reinstalled“ erkannt; `installedAt` taugt nicht (wird beim Reinstall nicht neu gesetzt).
 - `orders/updated` kommt regelmäßig **vor** `orders/create` → no-op, create bringt dieselben Totals.
@@ -26,6 +27,5 @@ WP: **WP2 umgesetzt**, Branch `wp2-ingestion`, PR offen → `main`. Offen im PR 
 - Replays gegen den `shopify app dev`-Server bekommen 401 (CLI injiziert ein anderes Secret); `pnpm webhook:replay` gegen `pnpm dev:dashboard` (:3000) nutzen.
 
 ## Offen
-- Multi-Currency-Fixture + Abnahmepunkt (wartet auf Markt/EUR auf Store one).
 - Review-Risiko non-embedded Dashboard (ADR-0099 c/g); Pseudonymisierung bei `shop/redact` juristisch offen (plan 8.6); PCD-Antrag vor WP-R.
 - Dev/Prod teilen die DB – vor WP7 trennen oder `Shop.appClientId`.
