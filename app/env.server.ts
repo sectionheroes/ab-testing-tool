@@ -14,7 +14,7 @@ const required = [
   "GOOGLE_CLIENT_SECRET",
 ] as const;
 
-const optional = ["SENTRY_DSN", "SLACK_WEBHOOK_URL", "NODE_ENV", "WEBHOOK_STORE_PAYLOAD"] as const;
+const optional = ["SENTRY_DSN", "SLACK_WEBHOOK_URL", "NODE_ENV"] as const;
 
 type RequiredKey = (typeof required)[number];
 type OptionalKey = (typeof optional)[number];
@@ -30,9 +30,6 @@ export function env(key: RequiredKey | OptionalKey): string | undefined {
 }
 
 export const isProduction = process.env.NODE_ENV === "production";
-
-/** WP1 only: persist every webhook payload so real payloads can be inspected on the dev store. WP2 flips this to error-only (ADR-0024). */
-export const storeWebhookPayloads = process.env.WEBHOOK_STORE_PAYLOAD === "true";
 
 /** Fail fast at boot instead of on the first request that needs a variable. */
 export function assertEnv() {

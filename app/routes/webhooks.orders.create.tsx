@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { handleWebhookStub } from "../services/webhook-handler.server";
+import { handleWebhook } from "../services/webhook-handler.server";
 
-// WP1 stub: HMAC + WebhookEvent. Processing comes in WP2.
-export const action = ({ request }: ActionFunctionArgs) => handleWebhookStub(request);
+// HMAC + idempotent WebhookEvent + inline processing (services/webhook-processing.server.ts).
+export const action = ({ request }: ActionFunctionArgs) => handleWebhook(request);

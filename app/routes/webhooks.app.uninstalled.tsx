@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { handleWebhookStub } from "../services/webhook-handler.server";
-import { markUninstalled } from "../services/shops.server";
+import { handleWebhook } from "../services/webhook-handler.server";
 
-export const action = ({ request }: ActionFunctionArgs) => handleWebhookStub(request, ({ shop }) => markUninstalled(shop));
+// app/uninstalled → markUninstalled() via the dispatcher (unchanged behaviour from WP1).
+export const action = ({ request }: ActionFunctionArgs) => handleWebhook(request);

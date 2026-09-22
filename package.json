@@ -14,6 +14,8 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "seed:admin": "tsx scripts/seed-admin.ts",
+    "seed:experiment": "tsx scripts/seed-experiment.ts",
+    "webhook:replay": "tsx --env-file=.env scripts/replay-webhook.ts",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
     "typecheck": "react-router typegen && tsc --noEmit",
     "prisma": "prisma",
