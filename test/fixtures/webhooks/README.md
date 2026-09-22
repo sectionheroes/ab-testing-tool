@@ -11,7 +11,7 @@ filled in the way a PCD-approved app receives it, so the `stripPii()` test has s
 | `orders-create.cart-attribute.json` | #1002, `_ab` cart attribute `demo-test:b` set via `/cart/update.js` |
 | `orders-create.line-item-property.json` | #1003, Buy-Now style `properties[_ab] = demo-test:a` via `/cart/add.js` |
 | `orders-create.no-attribute.json` | #1004, no attribute anywhere |
-| `orders-create.multi-currency.json` | presentment currency ≠ shop currency (Market Germany/EUR) |
+| `orders-create.multi-currency.json` | #1005, market Canada/CAD: presentment 855,00 CAD, shop_money 610,95 USD (Shopify Payments test mode) |
 | `orders-create.pii-full.json` | synthetic – see above |
 | `orders-updated.edit.json` | #1004 after an order edit (quantity 1 → 2, partially_paid) |
 | `refunds-create.json` | $100 custom-amount refund on #1002 – `transactions[]` carry no `amount_set`, `order_adjustments[]` do |

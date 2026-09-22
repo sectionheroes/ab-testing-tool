@@ -1,0 +1,352 @@
+{
+  "id": 7612100182300,
+  "admin_graphql_api_id": "gid://shopify/Order/7612100182300",
+  "app_id": 580111,
+  "browser_ip": "2001:db8::1",
+  "buyer_accepts_marketing": false,
+  "cancel_reason": null,
+  "cancelled_at": null,
+  "cart_token": "hWNH7K5OK6vQiAOueLEVxzd4",
+  "checkout_token": "59262848f935be2e257b0751f11427f8",
+  "client_details": {
+    "accept_language": "en-CA",
+    "browser_height": null,
+    "browser_ip": "2001:db8::1",
+    "browser_width": null,
+    "session_hash": null,
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+  },
+  "closed_at": null,
+  "company": null,
+  "confirmation_number": "Z6LIWT3GJ",
+  "confirmed": true,
+  "created_at": "2026-09-22T03:08:57-04:00",
+  "currency": "USD",
+  "current_shipping_price_set": {
+    "shop_money": {
+      "amount": "30.73",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "43.00",
+      "currency_code": "CAD"
+    }
+  },
+  "current_subtotal_price": "580.22",
+  "current_subtotal_price_set": {
+    "shop_money": {
+      "amount": "580.22",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "812.00",
+      "currency_code": "CAD"
+    }
+  },
+  "current_total_additional_fees_set": null,
+  "current_total_discounts": "0.00",
+  "current_total_discounts_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "CAD"
+    }
+  },
+  "current_total_duties_set": null,
+  "current_total_price": "610.95",
+  "current_total_price_set": {
+    "shop_money": {
+      "amount": "610.95",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "855.00",
+      "currency_code": "CAD"
+    }
+  },
+  "current_total_tax": "0.00",
+  "current_total_tax_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "CAD"
+    }
+  },
+  "customer_locale": "en-CA",
+  "device_id": null,
+  "discount_codes": [],
+  "duties_included": false,
+  "estimated_taxes": false,
+  "financial_status": "paid",
+  "fulfillment_status": null,
+  "landing_site": "/?_bt=eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaEpJaVJ6YUMxaFlpMTBaWE4wYVc1bkxXOXVaUzV0ZVhOb2IzQnBabmt1WTI5dEJqb0dSVlE9IiwiZXhwIjoiMjAyNi0wOS0yMVQyMDowNTo1MC4zMzBaIiwicHVyIjoicGVybWFuZW50X3Bhc3N3b3JkX2J5cGFzcyJ9fQ==--f9fac9556e5380013f08e7f922a0e413aca2705c",
+  "landing_site_ref": null,
+  "location_id": null,
+  "merchant_business_entity_id": "30290968860",
+  "merchant_of_record_app_id": null,
+  "name": "#1005",
+  "note": null,
+  "note_attributes": [
+    {
+      "name": "_ab",
+      "value": "demo-test:b"
+    }
+  ],
+  "number": 5,
+  "order_number": 1005,
+  "original_total_additional_fees_set": null,
+  "original_total_duties_set": null,
+  "payment_gateway_names": [
+    "bogus"
+  ],
+  "po_number": null,
+  "presentment_currency": "CAD",
+  "processed_at": "2026-09-22T03:08:56-04:00",
+  "reference": null,
+  "referring_site": "https://admin.shopify.com/",
+  "source_identifier": null,
+  "source_name": "web",
+  "source_url": null,
+  "subtotal_price": "580.22",
+  "subtotal_price_set": {
+    "shop_money": {
+      "amount": "580.22",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "812.00",
+      "currency_code": "CAD"
+    }
+  },
+  "tags": "",
+  "tax_exempt": false,
+  "tax_lines": [],
+  "taxes_included": false,
+  "test": true,
+  "token": "73cb24ea004c30021e0f0bfaae9a7398",
+  "total_cash_rounding_payment_adjustment_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "CAD"
+    }
+  },
+  "total_cash_rounding_refund_adjustment_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "CAD"
+    }
+  },
+  "total_discounts": "0.00",
+  "total_discounts_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "CAD"
+    }
+  },
+  "total_line_items_price": "580.22",
+  "total_line_items_price_set": {
+    "shop_money": {
+      "amount": "580.22",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "812.00",
+      "currency_code": "CAD"
+    }
+  },
+  "total_outstanding": "0.00",
+  "total_price": "610.95",
+  "total_price_set": {
+    "shop_money": {
+      "amount": "610.95",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "855.00",
+      "currency_code": "CAD"
+    }
+  },
+  "total_shipping_price_set": {
+    "shop_money": {
+      "amount": "30.73",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "43.00",
+      "currency_code": "CAD"
+    }
+  },
+  "total_tax": "0.00",
+  "total_tax_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "CAD"
+    }
+  },
+  "total_tip_received": "0.00",
+  "total_weight": 0,
+  "updated_at": "2026-09-22T03:08:59-04:00",
+  "user_id": null,
+  "billing_address": {
+    "province": "Ontario",
+    "country": "Canada",
+    "country_code": "CA",
+    "province_code": "ON"
+  },
+  "customer": {
+    "id": 10442132062492,
+    "created_at": "2026-09-22T01:51:39-04:00",
+    "updated_at": "2026-09-22T03:08:58-04:00",
+    "state": "disabled",
+    "note": null,
+    "verified_email": true,
+    "multipass_identifier": null,
+    "tax_exempt": false,
+    "currency": "USD",
+    "tax_exemptions": [],
+    "admin_graphql_api_id": "gid://shopify/Customer/10442132062492",
+    "default_address": {
+      "id": 12438726770972,
+      "customer_id": 10442132062492,
+      "company": null,
+      "province": "New York",
+      "country": "United States",
+      "province_code": "NY",
+      "country_code": "US",
+      "country_name": "United States",
+      "default": true
+    }
+  },
+  "discount_applications": [],
+  "fulfillments": [],
+  "line_items": [
+    {
+      "id": 17760764756252,
+      "admin_graphql_api_id": "gid://shopify/LineItem/17760764756252",
+      "attributed_staffs": [],
+      "current_quantity": 1,
+      "fulfillable_quantity": 1,
+      "fulfillment_service": "manual",
+      "fulfillment_status": null,
+      "gift_card": false,
+      "grams": 0,
+      "name": "The Collection Snowboard: Hydrogen",
+      "price": "580.22",
+      "price_set": {
+        "shop_money": {
+          "amount": "580.22",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "812.00",
+          "currency_code": "CAD"
+        }
+      },
+      "product_exists": true,
+      "product_id": 10982289670428,
+      "properties": [],
+      "quantity": 1,
+      "requires_shipping": true,
+      "sales_line_item_group_id": null,
+      "sku": null,
+      "taxable": true,
+      "title": "The Collection Snowboard: Hydrogen",
+      "total_discount": "0.00",
+      "total_discount_set": {
+        "shop_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "0.00",
+          "currency_code": "CAD"
+        }
+      },
+      "variant_id": 54597328371996,
+      "variant_inventory_management": "shopify",
+      "variant_title": null,
+      "vendor": "Hydrogen Vendor",
+      "tax_lines": [],
+      "duties": [],
+      "discount_allocations": []
+    }
+  ],
+  "payment_terms": null,
+  "refunds": [],
+  "shipping_address": {
+    "province": "Ontario",
+    "country": "Canada",
+    "country_code": "CA",
+    "province_code": "ON"
+  },
+  "shipping_lines": [
+    {
+      "id": 6181171757340,
+      "carrier_identifier": null,
+      "code": "International Shipping",
+      "current_discounted_price_set": {
+        "shop_money": {
+          "amount": "30.73",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "43.00",
+          "currency_code": "CAD"
+        }
+      },
+      "discounted_price": "30.73",
+      "discounted_price_set": {
+        "shop_money": {
+          "amount": "30.73",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "43.00",
+          "currency_code": "CAD"
+        }
+      },
+      "is_removed": false,
+      "phone": null,
+      "price": "30.73",
+      "price_set": {
+        "shop_money": {
+          "amount": "30.73",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "43.00",
+          "currency_code": "CAD"
+        }
+      },
+      "requested_fulfillment_service_id": null,
+      "source": "shopify",
+      "title": "International Shipping",
+      "tax_lines": [],
+      "discount_allocations": []
+    }
+  ],
+  "returns": [],
+  "line_item_groups": []
+}

@@ -57,6 +57,22 @@ describe("orderFields", () => {
     ]);
   });
 
+  it("multi-currency order: every amount is the shop-currency (USD) value, never presentment (CAD)", () => {
+    const payload = loadFixture("orders-create.multi-currency.json");
+    expect(payload.currency).toBe("USD");
+    expect(payload.presentment_currency).toBe("CAD");
+    expect((payload.total_price_set as { presentment_money: { amount: string } }).presentment_money.amount).toBe("855.00");
+    const f = orderFields(payload);
+    expect(f.currency).toBe("USD");
+    expect(f.totalPrice).toBe("610.95");
+    expect(f.totalShipping).toBe("30.73");
+    // Shopify converts the CAD presentment price back to USD (580,22), so shop_money ≠ the USD catalogue price – that is what we store
+    expect(f.subtotalPrice).toBe("580.22");
+    expect(lineItemRows(payload)[0].price).toBe("580.22");
+    expect(JSON.stringify(f.raw)).not.toContain("855.00");
+    expect(JSON.stringify(f.raw)).not.toContain("CAD");
+  });
+
   it("throws on a payload without shop_money so the event is recorded as failed", () => {
     const p = loadFixture("orders-create.no-attribute.json");
     delete p.total_price_set;
