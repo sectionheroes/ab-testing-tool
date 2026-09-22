@@ -4,16 +4,22 @@ import { requireUser } from "../services/auth.server";
 import { getShop } from "../services/shops.server";
 import { listRecentOrders } from "../services/orders.server";
 import { listRecentWebhookEvents } from "../services/webhooks.server";
+import { listExposureCounts, listRecentSnippetErrors } from "../services/exposures.server";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 
-// Shop detail – CLIENT users land here (guard in auth.server.ts). WP2: read-only Orders / Webhook events tables for
-// inspecting ingestion. Experiments and results follow in WP5.
+// Shop detail – CLIENT users land here (guard in auth.server.ts). Read-only inspection tables: Orders / Webhook events
+// (WP2), Exposures per variant with bot share / Snippet errors (WP3). Experiments and results follow in WP5.
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   await requireUser(request);
   const shop = await getShop(params.id!);
   if (!shop) throw new Response("Shop not found", { status: 404 });
-  const [orders, events] = await Promise.all([listRecentOrders(shop.id), listRecentWebhookEvents(shop.id)]);
+  const [orders, events, exposures, snippetErrors] = await Promise.all([
+    listRecentOrders(shop.id),
+    listRecentWebhookEvents(shop.id),
+    listExposureCounts(shop.id),
+    listRecentSnippetErrors(shop.id),
+  ]);
   return {
     shop: { id: shop.id, domain: shop.domain, name: shop.name, status: shop.status },
     orders: orders.map((o) => ({
@@ -38,16 +44,28 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       attempts: e.attempts,
       error: e.error,
     })),
+    exposures,
+    snippetErrors: snippetErrors.map((e) => ({
+      id: e.id,
+      createdAt: e.createdAt.toISOString(),
+      experimentKey: e.experimentKey,
+      variantKey: e.variantKey,
+      message: e.message,
+      url: e.url,
+      userAgent: e.userAgent,
+    })),
   };
 };
 
 const dateFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "medium" });
 const money = (amount: string | number, currency: string) => new Intl.NumberFormat("de-DE", { style: "currency", currency }).format(Number(amount));
+const int = new Intl.NumberFormat("de-DE");
+const pct = new Intl.NumberFormat("de-DE", { style: "percent", maximumFractionDigits: 1 });
 
 const Empty = () => <span className="text-base-content/30">—</span>;
 
 export default function ShopDetail() {
-  const { shop, orders, events } = useLoaderData<typeof loader>();
+  const { shop, orders, events, exposures, snippetErrors } = useLoaderData<typeof loader>();
   return (
     <>
       <PageHeader title={shop.name}>
@@ -101,6 +119,76 @@ export default function ShopDetail() {
         </table>
       </div>
 
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-base-content/60">Exposures</h2>
+      <div className="mb-6 overflow-x-auto rounded-box border border-base-300 bg-base-200">
+        <table className="table table-sm">
+          <thead>
+            <tr>
+              <th>Experiment</th>
+              <th>Variant</th>
+              <th className="text-right">Visitors</th>
+              <th className="text-right">Bots</th>
+              <th className="whitespace-nowrap text-right">Bot share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {exposures.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-9 text-center text-base-content/60">
+                  No exposures yet.
+                </td>
+              </tr>
+            )}
+            {exposures.map((x) => (
+              <tr key={`${x.experimentKey}:${x.variantKey}`}>
+                <td className="align-top font-mono text-xs">{x.experimentKey}</td>
+                <td className="align-top font-mono text-xs">{x.variantKey}</td>
+                <td className="text-right align-top tabular-nums">{int.format(x.visitors)}</td>
+                <td className="text-right align-top tabular-nums">{int.format(x.bots)}</td>
+                <td className="text-right align-top tabular-nums">{x.visitors + x.bots === 0 ? <Empty /> : pct.format(x.bots / (x.visitors + x.bots))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-base-content/60">Snippet errors</h2>
+      <div className="mb-6 overflow-x-auto rounded-box border border-base-300 bg-base-200">
+        <table className="table table-sm">
+          <thead>
+            <tr>
+              <th className="whitespace-nowrap">Time</th>
+              <th>Experiment</th>
+              <th>Message</th>
+              <th>URL</th>
+              <th>User agent</th>
+            </tr>
+          </thead>
+          <tbody>
+            {snippetErrors.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-9 text-center text-base-content/60">
+                  No snippet errors.
+                </td>
+              </tr>
+            )}
+            {snippetErrors.map((e) => (
+              <tr key={e.id}>
+                <td className="whitespace-nowrap align-top tabular-nums">{dateFmt.format(new Date(e.createdAt))}</td>
+                <td className="align-top font-mono text-xs">
+                  {e.experimentKey}:{e.variantKey}
+                </td>
+                <td className="max-w-md align-top">
+                  <span className="block truncate text-xs text-error">{e.message}</span>
+                </td>
+                <td className="max-w-xs align-top">{e.url ? <span className="block truncate font-mono text-xs">{e.url}</span> : <Empty />}</td>
+                <td className="max-w-xs align-top">{e.userAgent ? <span className="block truncate text-xs text-base-content/60">{e.userAgent}</span> : <Empty />}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-base-content/60">Webhook events</h2>
       <div className="overflow-x-auto rounded-box border border-base-300 bg-base-200">
         <table className="table table-sm">
@@ -136,7 +224,7 @@ export default function ShopDetail() {
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-xs text-base-content/50">Last 50 of each, newest first.</p>
+      <p className="mt-3 text-xs text-base-content/50">Orders, snippet errors and webhook events: last 50 each, newest first. Exposures: all rows, including bots.</p>
     </>
   );
 }
