@@ -1,0 +1,12 @@
+{
+  "shop_id": 96470740252,
+  "shop_domain": "sh-ab-testing-one.myshopify.com",
+  "customer": {
+    "id": 10442132062492,
+    "email": "shab-test@example.com",
+    "phone": null
+  },
+  "orders_to_redact": [
+    7612020818204
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "id": 1029841420572,
+  "order_id": 7612020818204,
+  "created_at": "2026-09-22T01:55:10-04:00",
+  "note": "",
+  "user_id": 127845531932,
+  "processed_at": "2026-09-22T01:55:10-04:00",
+  "duties": [],
+  "total_duties_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    }
+  },
+  "return": null,
+  "refund_shipping_lines": [],
+  "restock": false,
+  "admin_graphql_api_id": "gid://shopify/Refund/1029841420572",
+  "order_adjustments": [
+    {
+      "id": 382272340252,
+      "order_id": 7612020818204,
+      "refund_id": 1029841420572,
+      "amount": "-100.00",
+      "tax_amount": "0.00",
+      "kind": "refund_discrepancy",
+      "reason": "Refund discrepancy",
+      "amount_set": {
+        "shop_money": {
+          "amount": "-100.00",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "-100.00",
+          "currency_code": "USD"
+        }
+      },
+      "tax_amount_set": {
+        "shop_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        }
+      }
+    }
+  ],
+  "refund_line_items": [],
+  "transactions": [
+    {
+      "id": 9607019757852,
+      "order_id": 7612020818204,
+      "kind": "refund",
+      "gateway": "bogus",
+      "status": "success",
+      "message": "Bogus Gateway: Forced success",
+      "created_at": "2026-09-22T01:55:10-04:00",
+      "test": true,
+      "authorization": null,
+      "location_id": null,
+      "user_id": 127845531932,
+      "parent_id": 9607010681116,
+      "processed_at": "2026-09-22T01:55:10-04:00",
+      "device_id": null,
+      "error_code": null,
+      "source_name": "1830279",
+      "payment_details": {
+        "credit_card_bin": "1",
+        "avs_result_code": null,
+        "cvv_result_code": null,
+        "credit_card_number": "•••• •••• •••• 1",
+        "credit_card_company": "Bogus",
+        "buyer_action_info": null,
+        "credit_card_name": "Shab Testcustomer",
+        "credit_card_wallet": null,
+        "credit_card_expiration_month": 12,
+        "credit_card_expiration_year": 2030,
+        "payment_method_name": "bogus"
+      },
+      "receipt": {
+        "paid_amount": "100.00"
+      },
+      "amount": "100.00",
+      "currency": "USD",
+      "payment_id": "#1002.2",
+      "total_unsettled_set": {
+        "presentment_money": {
+          "amount": "0.0",
+          "currency": "USD"
+        },
+        "shop_money": {
+          "amount": "0.0",
+          "currency": "USD"
+        }
+      },
+      "manual_payment_gateway": false,
+      "amount_rounding": null,
+      "admin_graphql_api_id": "gid://shopify/OrderTransaction/9607019757852"
+    }
+  ]
+}

@@ -6,6 +6,10 @@ import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { createSentryHandleError, wrapSentryHandleRequest } from "@sentry/react-router";
 import { addDocumentResponseHeaders } from "./shopify.server";
+import { assertEnv } from "./env.server";
+
+// Fail at boot, not on the first request that needs a variable (STATUS WP1 note).
+assertEnv();
 
 export const streamTimeout = 5000;
 

@@ -1,0 +1,422 @@
+{
+  "id": 7612020818205,
+  "admin_graphql_api_id": "gid://shopify/Order/7612020818204",
+  "app_id": 580111,
+  "browser_ip": "2001:db8::1",
+  "buyer_accepts_marketing": false,
+  "cancel_reason": null,
+  "cancelled_at": null,
+  "cart_token": "hWNH7CFAVeVlrcyTw2AkFA4w",
+  "checkout_token": "11e15a6c93d3100788ee552a40710055",
+  "client_details": {
+    "accept_language": "en-US",
+    "browser_height": null,
+    "browser_ip": "2001:db8::1",
+    "browser_width": null,
+    "session_hash": null,
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+  },
+  "closed_at": null,
+  "company": null,
+  "confirmation_number": "Q3MC80U6W",
+  "confirmed": true,
+  "created_at": "2026-09-22T01:51:40-04:00",
+  "currency": "USD",
+  "current_shipping_price_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    }
+  },
+  "current_subtotal_price": "600.00",
+  "current_subtotal_price_set": {
+    "shop_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    }
+  },
+  "current_total_additional_fees_set": null,
+  "current_total_discounts": "0.00",
+  "current_total_discounts_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    }
+  },
+  "current_total_duties_set": null,
+  "current_total_price": "600.00",
+  "current_total_price_set": {
+    "shop_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    }
+  },
+  "current_total_tax": "0.00",
+  "current_total_tax_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    }
+  },
+  "customer_locale": "en-US",
+  "device_id": null,
+  "discount_codes": [],
+  "duties_included": false,
+  "estimated_taxes": false,
+  "financial_status": "paid",
+  "fulfillment_status": null,
+  "landing_site": "/?_bt=eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaEpJaVJ6YUMxaFlpMTBaWE4wYVc1bkxXOXVaUzV0ZVhOb2IzQnBabmt1WTI5dEJqb0dSVlE9IiwiZXhwIjoiMjAyNi0wOS0yMVQyMDowNTo1MC4zMzBaIiwicHVyIjoicGVybWFuZW50X3Bhc3N3b3JkX2J5cGFzcyJ9fQ==--f9fac9556e5380013f08e7f922a0e413aca2705c",
+  "landing_site_ref": null,
+  "location_id": null,
+  "merchant_business_entity_id": "30290968860",
+  "merchant_of_record_app_id": null,
+  "name": "#1002-pii",
+  "note": "ring twice",
+  "note_attributes": [
+    {
+      "name": "_ab",
+      "value": "demo-test:b"
+    }
+  ],
+  "number": 2,
+  "order_number": 1002,
+  "original_total_additional_fees_set": null,
+  "original_total_duties_set": null,
+  "payment_gateway_names": [
+    "bogus"
+  ],
+  "po_number": null,
+  "presentment_currency": "USD",
+  "processed_at": "2026-09-22T01:51:39-04:00",
+  "reference": null,
+  "referring_site": "https://admin.shopify.com/",
+  "source_identifier": null,
+  "source_name": "web",
+  "source_url": null,
+  "subtotal_price": "600.00",
+  "subtotal_price_set": {
+    "shop_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    }
+  },
+  "tags": "",
+  "tax_exempt": false,
+  "tax_lines": [],
+  "taxes_included": false,
+  "test": true,
+  "token": "a4afb0db387fef4d92bd75f04a39eafb",
+  "total_cash_rounding_payment_adjustment_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    }
+  },
+  "total_cash_rounding_refund_adjustment_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    }
+  },
+  "total_discounts": "0.00",
+  "total_discounts_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    }
+  },
+  "total_line_items_price": "600.00",
+  "total_line_items_price_set": {
+    "shop_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    }
+  },
+  "total_outstanding": "0.00",
+  "total_price": "600.00",
+  "total_price_set": {
+    "shop_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "600.00",
+      "currency_code": "USD"
+    }
+  },
+  "total_shipping_price_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    }
+  },
+  "total_tax": "0.00",
+  "total_tax_set": {
+    "shop_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    },
+    "presentment_money": {
+      "amount": "0.00",
+      "currency_code": "USD"
+    }
+  },
+  "total_tip_received": "0.00",
+  "total_weight": 0,
+  "updated_at": "2026-09-22T01:51:41-04:00",
+  "user_id": null,
+  "billing_address": {
+    "first_name": "Shab",
+    "last_name": "Testcustomer",
+    "address1": "1 Test Street",
+    "address2": null,
+    "city": "New York",
+    "zip": "10001",
+    "province": "New York",
+    "country": "United States",
+    "phone": "+12125550100",
+    "name": "Shab Testcustomer",
+    "company": null,
+    "latitude": 40.7128,
+    "longitude": -74.006,
+    "country_code": "US",
+    "province_code": "NY"
+  },
+  "customer": {
+    "id": 10442132062492,
+    "created_at": "2026-09-22T01:51:39-04:00",
+    "updated_at": "2026-09-22T01:51:40-04:00",
+    "state": "disabled",
+    "note": null,
+    "verified_email": true,
+    "multipass_identifier": null,
+    "tax_exempt": false,
+    "currency": "USD",
+    "tax_exemptions": [],
+    "admin_graphql_api_id": "gid://shopify/Customer/10442132062492",
+    "default_address": {
+      "id": 1,
+      "customer_id": 10442132062492,
+      "first_name": "Shab",
+      "last_name": "Testcustomer",
+      "address1": "1 Test Street",
+      "address2": null,
+      "city": "New York",
+      "zip": "10001",
+      "province": "New York",
+      "country": "United States",
+      "phone": "+12125550100",
+      "name": "Shab Testcustomer",
+      "company": null,
+      "latitude": 40.7128,
+      "longitude": -74.006,
+      "country_code": "US",
+      "province_code": "NY",
+      "default": true
+    },
+    "email": "shab-test@example.com",
+    "first_name": "Shab",
+    "last_name": "Testcustomer",
+    "phone": "+12125550100"
+  },
+  "discount_applications": [],
+  "fulfillments": [
+    {
+      "id": 1,
+      "order_id": 7612020818204,
+      "status": "success",
+      "destination": {
+        "first_name": "Shab",
+        "last_name": "Testcustomer",
+        "address1": "1 Test Street",
+        "address2": null,
+        "city": "New York",
+        "zip": "10001",
+        "province": "New York",
+        "country": "United States",
+        "phone": "+12125550100",
+        "name": "Shab Testcustomer",
+        "company": null,
+        "latitude": 40.7128,
+        "longitude": -74.006,
+        "country_code": "US",
+        "province_code": "NY"
+      },
+      "line_items": []
+    }
+  ],
+  "line_items": [
+    {
+      "id": 17760610320668,
+      "admin_graphql_api_id": "gid://shopify/LineItem/17760610320668",
+      "attributed_staffs": [],
+      "current_quantity": 1,
+      "fulfillable_quantity": 1,
+      "fulfillment_service": "manual",
+      "fulfillment_status": null,
+      "gift_card": false,
+      "grams": 0,
+      "name": "The Collection Snowboard: Hydrogen",
+      "price": "600.00",
+      "price_set": {
+        "shop_money": {
+          "amount": "600.00",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "600.00",
+          "currency_code": "USD"
+        }
+      },
+      "product_exists": true,
+      "product_id": 10982289670428,
+      "properties": [],
+      "quantity": 1,
+      "requires_shipping": true,
+      "sales_line_item_group_id": null,
+      "sku": null,
+      "taxable": true,
+      "title": "The Collection Snowboard: Hydrogen",
+      "total_discount": "0.00",
+      "total_discount_set": {
+        "shop_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        }
+      },
+      "variant_id": 54597328371996,
+      "variant_inventory_management": "shopify",
+      "variant_title": null,
+      "vendor": "Hydrogen Vendor",
+      "tax_lines": [],
+      "duties": [],
+      "discount_allocations": []
+    }
+  ],
+  "payment_terms": null,
+  "refunds": [],
+  "shipping_address": {
+    "first_name": "Shab",
+    "last_name": "Testcustomer",
+    "address1": "1 Test Street",
+    "address2": null,
+    "city": "New York",
+    "zip": "10001",
+    "province": "New York",
+    "country": "United States",
+    "phone": "+12125550100",
+    "name": "Shab Testcustomer",
+    "company": null,
+    "latitude": 40.7128,
+    "longitude": -74.006,
+    "country_code": "US",
+    "province_code": "NY"
+  },
+  "shipping_lines": [
+    {
+      "id": 6181096063260,
+      "carrier_identifier": null,
+      "code": "Standard",
+      "current_discounted_price_set": {
+        "shop_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        }
+      },
+      "discounted_price": "0.00",
+      "discounted_price_set": {
+        "shop_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        }
+      },
+      "is_removed": false,
+      "phone": null,
+      "price": "0.00",
+      "price_set": {
+        "shop_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        },
+        "presentment_money": {
+          "amount": "0.00",
+          "currency_code": "USD"
+        }
+      },
+      "requested_fulfillment_service_id": null,
+      "source": "shopify",
+      "title": "Standard",
+      "tax_lines": [],
+      "discount_allocations": []
+    }
+  ],
+  "returns": [],
+  "line_item_groups": [],
+  "email": "shab-test@example.com",
+  "contact_email": "shab-test@example.com",
+  "phone": "+12125550100",
+  "payment_details": {
+    "credit_card_bin": "1",
+    "avs_result_code": null,
+    "cvv_result_code": null,
+    "credit_card_number": "•••• •••• •••• 1",
+    "credit_card_company": "Bogus",
+    "credit_card_name": "Shab Testcustomer"
+  }
+}

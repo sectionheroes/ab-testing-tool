@@ -1,9 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { handleWebhookStub } from "../services/webhook-handler.server";
-import { updateScope } from "../services/shops.server";
+import { handleWebhook } from "../services/webhook-handler.server";
 
-export const action = ({ request }: ActionFunctionArgs) =>
-  handleWebhookStub(request, async ({ shop, payload }) => {
-    const current = payload.current;
-    if (Array.isArray(current)) await updateScope(shop, current.join(","));
-  });
+// app/scopes_update → updateScope() via the dispatcher.
+export const action = ({ request }: ActionFunctionArgs) => handleWebhook(request);

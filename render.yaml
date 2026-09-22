@@ -1,6 +1,6 @@
 # Render Blueprint – documentation and fallback. The web service already exists (created manually,
 # auto-deploys `main`); do NOT connect this file as a Blueprint, that would create a second service.
-# Cron jobs (retry-webhooks, daily-stats, reconcile, cleanup) are added in WP4/WP6.
+# Cron jobs (retry-webhooks, daily-stats, reconcile, cleanup) are added in WP4/WP6; the /jobs/* endpoints exist from WP2.
 services:
   - type: web
     name: ab-testing-tool
@@ -41,6 +41,4 @@ services:
       - key: SLACK_WEBHOOK_URL
         sync: false
       - key: NODE_ENV
-        sync: false
-      - key: WEBHOOK_STORE_PAYLOAD
         sync: false
