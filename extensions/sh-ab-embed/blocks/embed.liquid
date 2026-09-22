@@ -1,0 +1,12 @@
+{% # shab.js is deliberately synchronous: it must run before first paint (hideUntilApplied, no flicker; ADR-0012) %}
+{% # theme-check-disable ParserBlockingScript %}
+<script>window.__shab = { config: {{ app.metafields.sh_ab.client.value | json }}, customerId: {{ customer.id | json }}, shop: {{ shop.permanent_domain | json }} };</script>
+<script src="{{ 'shab.js' | asset_url }}"></script>
+{% # theme-check-enable ParserBlockingScript %}
+{% schema %}
+{
+  "name": "Sectionheroes A/B Testing",
+  "target": "head",
+  "settings": []
+}
+{% endschema %}

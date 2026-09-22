@@ -12,7 +12,8 @@ const shopify = shopifyApp({
   scopes: env("SCOPES").split(","),
   appUrl: env("SHOPIFY_APP_URL"),
   authPathPrefix: "/auth",
-  sessionStorage: new ShopSessionStorage(prisma),
+  // Dynamic import: metafields.server needs `unauthenticated` from this module (circular otherwise).
+  sessionStorage: new ShopSessionStorage(prisma, (shopId) => import("./services/metafields.server").then((m) => m.syncOnActivation(shopId))),
   distribution: AppDistribution.AppStore,
   future: {
     expiringOfflineAccessTokens: true,
