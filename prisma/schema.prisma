@@ -181,6 +181,11 @@ model Exposure {
   @@unique([experimentId, visitorId])
   @@index([experimentId, variantId])
   @@index([experimentId, firstSeenAt])
+  // Covers the live aggregation of stats.server.ts (WP4): GROUP BY variant/device/isBot for one experiment, plus the
+  // firstSeenAt range that excludes tainted days. Lets Postgres answer it with an index-only scan, which is what keeps
+  // it inside the 500 ms budget of ADR-0019 once the table holds every shop's exposures. Index-only scans need the
+  // visibility map, so the table has to stay vacuumed – autovacuum does that; after a bulk load, run VACUUM by hand.
+  @@index([experimentId, variantId, device, isBot, firstSeenAt])
   @@index([customerId])
   @@index([shopId, firstSeenAt])
 }
