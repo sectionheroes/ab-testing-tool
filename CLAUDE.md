@@ -19,10 +19,12 @@ Never touch a merchant store from a dev session.
 ## Commands
 pnpm dev            # shopify app dev --config dev (tunnels to the dev store) – hard-wired to sh-ab-dev
 pnpm dev:dashboard  # second local server on http://localhost:3000 – the only origin Google OAuth accepts locally
-pnpm test           # vitest, all packages
+pnpm test           # vitest, no database needed; includes the A/A Monte-Carlo (~15 s, FPR must stay 4–6 %)
+pnpm test:db        # database-backed suite against the local Postgres; every case runs in a rolled-back transaction
 pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js, prints raw + gzip, fails above 8 KB gzip; then deploy --config dev
 pnpm db:migrate     # prisma migrate dev against the local Postgres (.env = postgresql://<user>@localhost:5432/sh_ab_dev)
 pnpm seed:admin <email>   # upsert a dashboard ADMIN (script, not a migration)
+pnpm seed:load [exposures] [orders]   # synthetic load fixture on the LOCAL db (default 1M/30k); prints the aggregation timings
 pnpm sync:config <shop>   # reserve `server` + rebuild/write the `client` metafield from RUNNING experiments
 pnpm experiment:status <shop> <key> <RUNNING|PAUSED|ENDED> [decision]   # status change via the service layer (writes the metafield)
 pnpm variant:code <shop> <key> <variant> --js <file> --css <file>       # code save via the service layer (hotfix on RUNNING)
@@ -50,9 +52,17 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
   attribution window ends, verdict on the primary metric only.
 - visitorId is always the cookie. customer.id is metadata for linking, never a bucketing input.
 - Every function in lib/stats has a reference test against a published worked example before it is used.
-  The A/A Monte-Carlo test (FPR 4–6%) must stay green. Never widen the band to make it pass.
+  The A/A Monte-Carlo test (FPR 4–6%) must stay green. Never widen the band to make it pass, and never lower the
+  10,000-run count to fit a time budget. `STATS_VERSION` in lib/stats is bumped by hand whenever a formula changes.
+- `.github/workflows/ci.yml` runs typecheck, lint, `pnpm test` and `pnpm test:db` on every pull request. All four green
+  is the bar for a merge; the workflow uses `prisma migrate deploy`, never `migrate dev`.
+- Raw SQL against a DateTime column binds its bounds through `utcTimestamp()` (app/services/stats.server.ts). A plain
+  `${date}` parameter is sent as `timestamptz` and gets reinterpreted in the session timezone, which differs between a
+  dev machine and Render – it looks right locally and is wrong in production.
 - The dashboard never shows p-values or a winner before plannedSampleSize is reached. Counts and revenue are live
   (query, not DailyStat); only the verdict waits.
+- One conversion is one identity: `Order.customerId`, else the order itself (ADR-0032) – nothing links an order to a
+  visitorId. Per-device order numbers only exist for orders linkable to an exposure; the UI must say so (WP5).
 - Editing a RUNNING experiment follows contract 4.6: code fields allowed with warning + AuditLog + report marker;
   targeting, allocation, weights and salt are locked.
 - Snippet budget: 8 KB gzip. Snippet errors must never break the merchant's page – every variant runs in try/catch,

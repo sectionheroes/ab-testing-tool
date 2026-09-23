@@ -1,88 +1,81 @@
 # Status
-Stand: 2026-09-22
+Stand: 2026-09-23
 
 ## Aktuell
-WP: **WP3 fertig** (3a Metafield-Config + Theme App Extension, 3b Snippet, 3c App-Proxy-Routen + Abnahme), Branch
-`wp3-snippet`, PR gegen `main` offen. Nächste Session: **WP4** (Stats-Engine + A/A-Simulation). Parallel WP-R vorbereiten.
+WP: **WP4 fertig** (Stats-Engine, A/A-Simulation, Live-Aggregation, Snapshot, DailyStat-Job), Branch `wp4-stats`,
+PR gegen `main` offen. Rein lokal – kein Dev-Store, kein Shopify-Call. Nächste Session: **WP5** (Dashboard, Editor,
+API, CLI). WP-R läuft parallel.
 
-## Fertig (3c)
-- `app/services/proxy.server.ts`: eigene App-Proxy-Signaturprüfung (ADR-0031), gegen **beide** Doku-Vektoren getestet
-  (Secret `hush`, Shop `shop-name.myshopify.com` – die Doku rendert ihn als `{shop}`). 405 kein POST · 400 kein `shop` ·
-  401 Signatur fehlt/falsch/älter als 5 min · 204 Shop unbekannt oder nicht ACTIVE (nichts gespeichert, Snippet setzt
-  seinen Marker) · sonst Kontext. Body ≤ 4 KB, `proxyAction` antwortet nach erfolgreicher Auth **immer** 204, auch bei
-  ungültigem Body oder Handler-Fehler (Fehler → Log + Sentry).
-- `app/services/exposures.server.ts`: `recordExposure` (handgeschriebener Validator, `createMany` + `skipDuplicates` =
-  ON CONFLICT DO NOTHING auf `(experimentId, visitorId)`), `linkVisitor` (setzt `customerId` nur wo null, überschreibt
-  nie einen anderen, loggt das), `recordSnippetError` (Row + Sentry). `app/services/bots.server.ts`: `isbot` + die
-  Snippet-Regex, fehlender UA = Bot.
-- Zwei In-Memory-Drosseln (eine Instanz, rahmen §9): max. **500 SnippetError-Rows pro Shop und rollender Stunde**,
-  darüber nur noch eine Log-Zeile; **ein Sentry-Event pro (Shop, Experiment, Message) je 10 min**.
-- Neues Modell `SnippetError` (+ Index `(shopId, createdAt)`), Migration `20260922105444_wp3_snippet_error`.
-  **Retention fehlt noch** – gehört in `/jobs/cleanup` (WP6), zusammen mit der Exposure-Retention.
-- Routen `proxy.e.tsx`, `proxy.link.tsx`, `proxy.err.tsx` (POST, Loader 405), nicht unter `app.tsx` genestet.
-- Shop-Detailseite: zwei zusätzliche read-only Tabellen – **Exposures** (Experiment/Variante, Visitors, Bots, Bot-Anteil)
-  und **Snippet errors** (letzte 50). Nur DESIGN.md-Rezepte, Zahlen `de-DE`.
-- Tests: 23 neue (189 gesamt, grün). Signaturvektoren, Timestamp-Fenster ±300 s, 405/400/401/204-Matrix, 4-KB-Body,
-  Duplicate ignoriert, nicht-RUNNING ignoriert, `customerId` nur aus dem Proxy-Parameter, Bot-Flag, Link überschreibt
-  nie, Sentry-Drossel, Row-Cap.
-
-## Befunde 3c (wichtig für spätere WPs)
-- **Kein Country.** App-Proxy-Requests bringen laut Doku nur `X-Forwarded-For` und `X-Forwarded-Host`, keinen
-  Geo-Header. `Exposure.country` bleibt null. Wenn wir Land wollen: GeoIP über `X-Forwarded-For` (eigene Entscheidung,
-  Datenschutz prüfen) oder Shopify-Localization aus dem Snippet mitschicken.
-- **`_ab` ist im Admin sichtbar** – ADR-0099 (d) ist damit geschlossen: Order #1006 zeigt „Additional details: `_ab`
-  demo-test:a" **und** die Line-Item-Property `_ab: demo-test:a`. konzept §7 bleibt wie versprochen.
-- **Dev-Stores lassen keine Nicht-Test-Orders zu**: „You can only test orders using the Bogus Test gateway … You can't
-  test orders using real transactions through active payment providers"
-  (`/docs/storefronts/themes/tools/development-stores`). Die manuelle Zahlungsart (Bank Deposit) wird im Checkout
-  blockiert („To place a test order, you'll need to use a test payment gateway"). Alle Abnahme-Orders haben deshalb
-  `test = true`. Die 4.8-Regel „nur `test = false` zählt" ist durch Unit-Tests (WP2) gedeckt, end-to-end erst in WP7.
-- Dieselbe Seite: **„You can't remove the password page"** – das Storefront-Passwort bleibt auf Dev-Stores an.
-  Ein passwortfreier Lighthouse-Lauf ist erst auf dem echten Store in WP7 möglich.
-- **Webhooks der Dev-App erreichen den CLI-Tunnel nicht.** App-Level-Subscriptions (TOML) werden gegen die
-  application_url der *released* Version zugestellt; `shopify app dev` ändert daran nichts, und `webhookSubscriptions`
-  (shop-level) ist leer. Für lokale Abnahmen gilt weiter der WP2-Weg: echte Payloads mit `pnpm webhook:replay` gegen
-  `pnpm dev:dashboard` (:3000) einspielen – der CLI-Dev-Server signiert mit einem anderen Secret und antwortet 401.
-- Offen aus ADR-0031: **Secret-Rotation**. Die Signaturprüfung kennt genau ein `SHOPIFY_API_SECRET`; für eine Rotation
-  müssten übergangsweise zwei akzeptiert werden.
-
-## Abnahme WP3 (sh-ab-testing-one, 22.09.2026)
+## Abnahme WP4
 | # | Item | Ergebnis |
 |---|---|---|
-| a | 10 Loads Home/PDP/Collection, frischer Visitor | **pass** – genau 1 Exposure (`44f15d3c…`, Variante a), Marker `_shab_exp:demo-test` nach dem ersten 204 |
-| b | `?ab_force=demo-test:b` | **pass** – roter Preis `rgb(211,47,47)`, keine Hidden Inputs, Exposure-Zahl unverändert |
-| c | Add to cart → Order → Admin | **pass** – Order #1006: `_ab: demo-test:a` als Order-Attribut *und* Line-Item-Property, im Admin unter „Additional details" sichtbar; lokal ingestiert → `CART_ATTRIBUTE` |
-| d | Zweite Order nach Checkout | **pass** – neuer Cart-Token, Attribut sofort wieder gesetzt, Order #1007 gleiche Variante a → `CART_ATTRIBUTE` |
-| e | Login-Link + `CUSTOMER_LOOKUP` | **pass** – `/proxy/link` setzt `Exposure.customerId` (`0 → 10442451222812`); Replay von #1008 ohne `note_attributes`/Properties mit Kunden-ID → `CUSTOMER_LOOKUP` |
-| f | `/proxy/e` erzwungen 500 | **pass** – 2 Loads ohne Marker und ohne Row, nach dem Revert genau 1 Row, weitere Loads kein Duplikat |
-| g | Consent (Pandectes) mit `requireConsent = true` | **pass** – vor Accept: kein `_shab_vid`, kein Exposure, Original; Decline: unverändert; nach Accept **ohne Reload** Variante b sichtbar + Exposure gesendet |
-| h | Lighthouse Mobile PDP, 3× an / 3× aus | **verschoben auf WP7** – nicht durchführbar, Begründung unten |
-| i | Bundle + Propagation | **pass** – 8.108 B raw / **3.505 B gzip** (43 % des 8-KB-Budgets); Propagation aus 3a: Edge 1–16 s, Origin 1–2 s |
-| j | Snippet-Fehlerpfad | **pass** – `throw new Error("boom")` in b: Original gezeigt, CSS wieder entfernt, **kein** Exposure, `SnippetError`-Row, Sentry-Event `0cf8f41ffb544018a03e617ab592d80f`, Dashboard-Tabelle zeigt sie; JS wiederhergestellt |
+| a | Referenztests mit Quellenangabe | **pass** – z-Test OpenStax *Intro Stats 2e* §10.3 (10.8/10.9/10.10), Welch NIST §7.3.1 (`t = 2.2694`, `ν = 15.5325`), Chi² OpenStax §11.2 (11.2/11.3/11.4); alle auf 4 Nachkommastellen, jede Zahl zusätzlich mit scipy 1.13.1 gegengerechnet |
+| b | A/A-FPR im Band, Zahlen in `lib/stats/README.md` | **pass** – CR **4,98 %**, RPV **5,36 %** (je 10.000 Läufe, seeded); vier weitere Seeds 4,54–5,20 % |
+| c | `significant: false` unter `plannedSampleSize` trotz p < 0,001 | **pass** – expliziter Test in `lib/stats/test/evaluate.test.ts` und gegen echte Daten in `stats.server.db.test.ts` |
+| d | Tainted Day entfernt genau diesen Tag | **pass** – DB-Test mit gesetzten Daten, Grenzfälle 21:00 Z / 23:00 Z / 22:30 Z gegen `Europe/Berlin`; gegen die 1-Mio-Fixture exakt gegen SQL-Ground-Truth geprüft |
+| e | Lasttest-Zahlen | **pass** – **396 ms Median** bei 1 Mio. Exposures / 30 k Orders (Details unten) |
+| f | `pnpm test`, typecheck, lint grün | **pass** – 311 Unit-Tests (15 s), 30 DB-Tests, typecheck und lint sauber |
 
-**Item h – warum verschoben.** Dev-Stores können das Storefront-Passwort nicht abschalten
-(`/docs/storefronts/themes/tools/development-stores`: „You can't remove the password page"). Damit braucht jeder
-Lighthouse-Lauf den `storefront_digest`-Cookie, also das Passwort. Der Theme-Preview-Share-Link
-(`*.shopifypreview.com`) umgeht das Gate **nicht** – auch er landet auf `/password` (am 22.09. mit einer Theme-Kopie
-geprüft, Kopie danach gelöscht). Der Lauf gehört damit ohnehin dorthin, wo er aussagekräftig ist: **WP7, erster echter
-Store, ohne Passwort**. Dort gilt weiter die Vorgabe aus plan.md/ADR-0099 (g): Performance-Delta ≤ 2 Punkte, je drei
-Läufe mit und ohne App Embed, alle sechs Scores in STATUS. Zwischenstand aus 3b: CSS steht vor dem ersten Paint,
-JS läuft bei DOMContentLoaded, Snippet 3.505 B gzip.
+## Lasttest (lokal, `pnpm seed:load`)
+1 Mio. Exposures, 30 k Orders, 1,5 k Refunds, 30 Tage, `Europe/Berlin`, Device-Link-Rate 31 %.
 
-Consent-Tool: **Pandectes GDPR Cookie Consent** (Free), lädt `consent-tracking-api.js` selbst und bedient
-`Shopify.customerPrivacy` nativ (`analyticsProcessingAllowed()` false vor Accept, true danach, Event
-`visitorConsentCollected` ohne Reload). Die Entscheidung liegt im Cookie `_pandectes_gdpr`.
+| Fall | Median | Anmerkung |
+|---|---|---|
+| ohne Tainted Days | **376 ms** | |
+| ein Tainted Day | **398 ms** | |
+| direkt nach dem Seed, eine Fixture in der Tabelle | **396 ms** | |
 
-## 3a/3b (unverändert, Details in d50056e und a3fc449)
-- `client-config.ts` + `metafields.server.ts` (AppInstallation, Namespace `sh_ab`, Guard 80 % von 128 KB),
-  `experiments.server.ts` (Status/Code-Save → Sync). Extension `sh-ab-embed`, Block `embed`, Deep-Link ok.
-- `lib/snippet` ohne Runtime-Dependencies, 27 Tests (FNV-1a-Vektoren, Verteilung 100 k IDs ±1 %, eingefrorener
-  Referenzvektor, Targeting, Attribut-Builder, Marker-Regeln). Flicker gemessen: CSS immer vor dem ersten Paint;
-  `hideUntilApplied=true` kostet ≈ 50 ms leere Seite und vermeidet das Nachrucken bei JS-Varianten.
+Gemessen auf **lokalem Postgres 17** (Homebrew, M-Laptop) mit **3 Mio. Exposure-Zeilen insgesamt** (drei Fixtures),
+davon 1 Mio. im gemessenen Experiment – die Zahl ist also eher pessimistisch. **Render-Prod hat 0,1 CPU; die Zahl,
+die zählt, wird nach dem DB-Upgrade vor WP7 neu gemessen.**
+
+Zwei Dinge haben die Query von 528 s auf unter 400 ms gebracht, beide sind Fallen für die nächste Session:
+- **Kein Lateral-Join gegen eine materialisierte CTE.** Die Exposure-Suche je Order lief gegen eine CTE mit 1 Mio.
+  Zeilen → 30 k × Full Scan. Direkt gegen `"Exposure"` nutzt sie `Exposure_customerId_idx`.
+- **Tainted Days als UTC-Bereich, nicht als `to_char(...)`.** Der String-Vergleich je Zeile kostete ~130 ms und
+  verhindert den Index-Only-Scan. `app/services/timezone.ts` rechnet den lokalen Tag in sein UTC-Intervall um (DST
+  getestet: 23-h- und 25-h-Tage).
+
+Neuer Index `Exposure(experimentId, variantId, device, isBot, firstSeenAt)`, Migration
+`20260922210000_wp4_exposure_stats_index`: Parallel Seq Scan 136 ms → **Index-Only-Scan 43 ms**. Index-Only braucht die
+Visibility Map – nach einem Bulk-Load einmal `VACUUM` laufen lassen, sonst ist er langsamer als der Seq Scan.
+
+## Befunde (wichtig für WP5 und WP7)
+- **Order → Visitor ist nicht auflösbar (ADR-0032, neu).** Nichts verbindet eine Order mit einer `visitorId`: 4.1
+  trägt nur `<experiment>:<variant>`, `Exposure.customerId` nur für eingeloggte Besucher. Eine Conversion ist deshalb
+  eine **Identität**: `Order.customerId`, sonst die Order selbst. Mehrfachkäufe eines eingeloggten Kunden zählen
+  einmal, Mehrfachkäufe eines Gasts ohne Customer-ID mehrfach – kleine CR-Verzerrung nach oben, in beiden Armen
+  gleich. `evaluate()` kappt Konverter auf Visitors und warnt. **Vorgabe an WP5:** Device-Zahlen für Orders gibt es
+  nur für verknüpfbare Orders (`deviceLinkRate`, hier 31 %); Visitors je Device sind exakt. Das muss im UI stehen.
+- **Prisma bindet `Date` in Raw-SQL als `timestamptz`.** Die Spalten sind `timestamp(3) without time zone` mit UTC –
+  der Vergleich wird in der Session-Zeitzone umgedeutet. Lokal (Berlin) verschiebt das jede Grenze um 1–2 h, auf
+  Render (UTC) nicht: es sieht lokal falsch aus und wäre in Prod richtig, oder umgekehrt. Hat im Tainted-Day-Test
+  zuerst falsche Zahlen erzeugt. Fix: `utcTimestamp()` in `stats.server.ts`, Regel steht in CLAUDE.md.
+- **Der Sample-Size-Rechner ist für RPV optimistisch.** Gemessen: bei dem n, das er ausgibt, liegt die echte Power auf
+  zero-inflated lognormalem Umsatz bei **71,6 %** statt 80 %. Zwei Gründe, beide in der von plan WP4 vorgegebenen
+  Formel angelegt (gleiche σ in beiden Armen; Varianznäherung mit höchstens einer Order je Visitor). Für RPV-Tests
+  aufrunden. Der Abstand ist durch einen Test festgenagelt und in `lib/stats/README.md` dokumentiert.
+- **Winsorisierung kostet ~0,2 pp FPR.** Gemeinsam über beide Arme (4.8) 5,36 %, ohne 5,16 %. Bleibt klar im Band,
+  ein Arm-eigener Cap wäre statistisch billiger und ist ausdrücklich nicht, was der Vertrag sagt.
+- **CI gibt es jetzt** (`.github/workflows/ci.yml`): typecheck, lint, `pnpm test`, `pnpm test:db` mit
+  Postgres-Service-Container bei jedem PR. Die A/A-Simulation läuft in 15 s und bleibt deshalb in der Default-Suite –
+  es gibt keine `test:slow`. Die DB-Tests laufen je Fall in einer zurückgerollten Transaktion und löschen nie eine Zeile.
+
+## Lokale DB – aufräumen ist deine Entscheidung
+`pnpm seed:load` löscht nie etwas, jeder Lauf legt einen neuen Shop an. In `sh_ab_dev` liegen jetzt **4 Load-Fixtures**
+(3 Mio. Exposures, 90 k Orders, **1,3 GB**), einer davon (`loadtest-20260922203649`) ist ein Fehlversuch mit nur
+Shop- und Experiment-Zeile. Anschauen:
+
+```
+psql sh_ab_dev -c "SELECT s.domain, (SELECT COUNT(*) FROM \"Exposure\" e WHERE e.\"shopId\" = s.id) FROM \"Shop\" s WHERE s.domain LIKE 'loadtest-%'"
+```
+
+Löschen habe ich bewusst nicht angefasst (CLAUDE.md).
 
 ## Offen
-- Retention für `SnippetError` und `Exposure` in `/jobs/cleanup` (WP6).
+- Retention für `SnippetError` und `Exposure` in `/jobs/cleanup` (WP6); Cron für `/jobs/daily-stats` ebenfalls WP6.
+- Lasttest auf Render nach dem DB-Upgrade vor WP7 wiederholen.
+- Item h (Lighthouse) und die `test = false`-Order weiter offen – nur auf einem echten Store möglich (WP7).
 - Secret-Rotation bei der Proxy-Signatur (ADR-0031).
-- **Item h (Lighthouse) offen** – zusammen mit der `test = false`-Order nur auf einem echten Store möglich (WP7).
 - Review-Risiko non-embedded Dashboard (ADR-0099 c/g); Pseudonymisierung bei `shop/redact` (plan 8.6); PCD-Antrag vor WP-R.
 - Prod-DB (Render) vor WP7 sauber neu aufsetzen; `Shop.appClientId` prüfen, falls Dev und Prod je in einer DB landen.
