@@ -979,13 +979,20 @@ mit Umschalter **Daily / Cumulative**. Filterleiste: Datums-Range (Explore, ADR-
 - DESIGN.md-Bausteine werden **über ihre Abschnittsnamen** referenziert, nie über Zeilennummern: Segmented Tabs ·
   DateRange-/Dropdown-Trigger · Tooltip · Accordion/Chevron · Chart-Tooltip und Legende · Content-Regeln (§10)
 
-**Vor 5b zu klären** (siehe ADR-0037):
-- **Designsystem**: Das Figma nutzt Lab-Dark (Slate/Emerald, Geist, Hex-Werte), DESIGN.md schreibt daisyUI-Tokens mit
-  Mint vor und verbietet Hex in Klassen. **Entscheidung Joel**, blockiert den Bau
-- **Tabs-Variante**: Segmented (DESIGN.md) oder die neue Underline-Variante aus dem Figma
-- **Fehlende DESIGN.md-Rezepte**: Donut (erlaubt, aber kein Rezept) und ein **gestyltes Tooltip-Popover** – das
-  beschriebene native `title` lässt sich nicht stylen und funktioniert auf Touch nicht
-- **Noch nicht designt**: volle Verdict-Karte nach erfüllter Stopp-Regel, Leer- und „too few"-Zustände
+**Vor 5b zu klären** (Stand 27.09., ADR-0037 ist die Historie):
+- ~~Designsystem~~ **entschieden**: Der Lab-Look steckt seit 27.09. in den Theme-Tokens von DESIGN.md §2
+  (Slate-Flächen, Emerald als einziger Akzent, invertierter Primary, Geist). DESIGN.md gilt damit unverändert;
+  `slate-*`/`emerald-*` bleiben nach §9 aus den Klassennamen heraus, die Werte stecken nur im Theme
+- ~~Tabs-Variante~~ **entschieden**: Underline-Tabs, Rezept steht in DESIGN.md §7 und nennt die Results-Tabs
+  ausdrücklich. Zähler neutral grau, nie farbig
+- **Offen – fehlende DESIGN.md-Rezepte**: **Donut** (§1 erlaubt ihn, ein Rezept fehlt) und ein **gestyltes
+  Tooltip-Popover**; der bestehende Eintrag setzt auf das native `title`, das sich nicht stylen lässt, verzögert
+  erscheint und auf Touch nicht funktioniert. Die Results-Seite trägt nach §10 rund zehn Tooltips aus dem Glossar –
+  ohne Popover nicht umsetzbar. Beide gehören nach DESIGN.md, **bevor** 5b gebaut wird
+- **Offen – noch nicht designt**: volle Verdict-Karte nach erfüllter Stopp-Regel, Leer- und „too few"-Zustände
+- **Offen – Widerspruch im Entwurf**: Die Statuszeile zeigt „40 % of 12.000 visitors per arm", also die abgelöste
+  visitor-basierte `plannedSampleSize`. Sie muss den Status der drei Bedingungen aus ADR-0036 plus `evaluableOn`
+  zeigen. Hier zieht das Design nach, nicht die Regel
 
 #### 5c – API + CLI
 
