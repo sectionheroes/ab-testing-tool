@@ -85,7 +85,11 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
   Channel is derived from `Exposure.referrer`/`utm` at exposure time – last touch, and it will not match Shopify
   Analytics; the UI has to say so under the table.
 - Every explained term in the UI gets its text from the glossary module, never inline in JSX – one definition per
-  term, so the same term cannot drift between pages.
+  term, so the same term cannot drift between pages. Which terms get a tooltip at all is governed by DESIGN.md §10:
+  only where a layperson stumbles, once per term at its first occurrence, never on self-explanatory column headers.
+- Results never polls. It loads on open, reloads on tab focus and has a refresh button with "Updated n s ago"
+  (DESIGN.md §10, ADR-0037). A value that is still locked gets no column of its own, and a lift stays neutral grey
+  until the stopping rule is met – colour is a verdict.
 - Editing a RUNNING experiment follows contract 4.6: code fields allowed with warning + AuditLog + report marker;
   targeting, allocation, weights and salt are locked.
 - Snippet budget: 8 KB gzip. Snippet errors must never break the merchant's page – every variant runs in try/catch,

@@ -1,6 +1,8 @@
-# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v4.2)
+# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v4.3)
 
 *Stand: 18.09.2026, v2 nach Joels Feedback. Baut auf dem Konzept-Doc auf (gleicher Ordner). UI-Design nach `DESIGN.md` (gleicher Ordner – ins Repo kopieren). Ziel: Das MVP so in Arbeitspakete schneiden, dass Claude Code jedes Paket in ein bis drei Sessions umsetzen kann, mit klaren Abnahmekriterien, und dass die Basis für Preis-/Versandtests (Phase 3) schon drin ist.*
+
+**v4.3 (27.09., nach dem Design-Review):** WP5b nach dem gezeichneten Entwurf überarbeitet (ADR-0037, kein Vertrag geändert). Overview jetzt: **Performance-Tabelle → schmale Verdict-Statuszeile → Distribution/Setup → Checks/History**. Eine Gesamttabelle über alle Goals statt nur der Primärmetrik; der Goals-Tab behält nur die Charts. Keine CI-Spalte vor erfüllter Stopp-Regel, Lifts bis dahin neutral grau. Header ohne Key und Shop-Domain, dafür mit Edit. Kein Auto-Polling mehr – Refresh-Button und Tab-Fokus. Tooltips stark reduziert nach der neuen **DESIGN.md §10 „Content-Regeln"**. **Offen und blockierend für 5b:** das Designsystem (Figma-Lab-Dark mit Hex vs. DESIGN.md/daisyUI mit Mint), zwei fehlende DESIGN.md-Rezepte (Donut, gestyltes Tooltip-Popover) und der Widerspruch, dass die gezeichnete Statuszeile noch die abgelöste visitor-basierte `plannedSampleSize` zeigt statt der Stopp-Regel aus ADR-0036.
 
 **v4.2 (27.09., vor WP5):** Stopp-Regel statt einzelner `plannedSampleSize` (ADR-0036, konkretisiert ADR-0018): **≥ 1.000 Conversions pro Arm · ≥ 14 Tage · nur auf vollen Wochengrenzen ab Startdatum**, alle drei einzeln abschaltbar, Defaults aus der bisherigen Sectionheroes-Praxis. Grund: Conversions sind shop-unabhängig (MDE ≈ 2,8·√(2/C)), Visitors nicht – und die Visitor-Zahl bräuchte eine Baseline-CR, die wir mangels Gesamttraffic nicht haben. Branchenrecherche im ADR: volle Wochen sind Konsens (Kohavi, Convert, SplitBase), bei den Conversions liegt die Branche mit 100–400 deutlich lockerer als wir. Neu dazu: Mindestlaufzeit unabhängig von den Conversions und eine Futility-Warnung ab 6 Wochen Prognose. Vertrag **4.6 ergänzt**: Stopp-Regel bei `RUNNING` nur verschärfbar, nie lockerer – sonst schaltet man sich per Schwellensenkung einen p-Wert frei. `evaluate()` gibt Status je Bedingung plus `evaluableOn`; Rechner übersetzt beidseitig MDE ↔ Conversions.
 
@@ -893,75 +895,97 @@ Editor · **5b** Results · **5c** API und CLI.
 
 #### 5b – Results-Seite (fünf Tabs)
 
-**Persistenter Header über allen Tabs**, unabhängig vom aktiven Tab sichtbar: Name, Key, Status-Badge, Primärmetrik,
-Startdatum und Laufzeit ("running for 12 days, since 11.09.2026"), rechts die Aktionen **Start / Pause / Stop** mit
-Bestätigung. **Keine Filter im Header** – Filter gehören in die Tabs (ADR-0034).
+Gegenüber plan v4.1 nach dem Design-Review überarbeitet (**ADR-0037**). Bindend sind zusätzlich **DESIGN.md §10
+Content-Regeln** (so wenig Content wie möglich, laientauglich) und der Figma-Stand
+`Results / a-running-no-verdict / dark / lab-slate · v3`.
 
-Der **Stop-Dialog** verlangt `decision` (`WINNER` / `NO_DIFFERENCE` / `INVALID` / `ABORTED`) und `conclusion` (Freitext);
-ohne beides kein Stop. Ist die Stopp-Regel **noch nicht erfüllt**, warnt der Dialog deutlich – "6 days short of the
-stopping rule. Stopping now freezes the result without a verdict – permanently, there is no recompute." – blockiert
-aber nicht: Abbrechen muss immer möglich sein. Derselbe Dialog erklärt den Unterschied, den man sonst genau einmal
-falsch macht: **Pause** stoppt die Auslieferung und lässt das Ergebnis offen, **Stop** friert ein. Er ruft in einer Transaktion `evaluate()`, schreibt `ExperimentResult` (§3: `numbers` + `frozen`
-+ `verdict`, `statsVersion`, `frozenAt`) und setzt erst dann `ENDED`. Für `ENDED`-Experimente liest die ganze Seite
-**ausschließlich** den Snapshot (Hinweis "Frozen on <date>, stats v<x>"), nie mehr die Live-Query. Kein
-"Recompute"-Button, kein Explore-Modus.
+**Persistenter Header über allen Tabs**: Name, Status-Badge, Primärmetrik, Startdatum und Laufzeit ("running for 12
+days, since 11.09.2026"), rechts **Edit** und die Aktionen. `Start` nur bei `DRAFT` und `PAUSED`; bei `RUNNING` nur
+`Pause` und `Stop`. **Kein** Experiment-Key (steht als Zeile „Key" im Setup), **keine** Shop-Domain (steht im
+Breadcrumb), keine Scope-Note, kein Filter-Hinweis, keine Filter (ADR-0034).
 
-**Tab 1 – Overview.** Der einzige Tab ohne Filter, weil hier das Urteil steht.
-- **Verdict**: Winner / kein Unterschied / noch nicht entscheidbar, auf der **Primärmetrik**. Vor erreichter Sample
-  Size steht "Not yet conclusive – n/N visitors" und **keine** p-values
-- **Performance overview**: die Primärmetrik groß – Visitors, Conversions, Rate, Lift, CI je Variante. Die
-  vollständigen Tabellen aller Goals stehen in Tab 2, nicht hier (eine Quelle, nicht zwei)
-- **Stopping rule** (ADR-0036) – kein einzelner Fortschrittsbalken, sondern die drei Bedingungen einzeln mit Status,
-  darüber das prognostizierte Datum:
-  ```
-  Stopping rule                          Evaluable on Sat, 04.10.2026
-    Conversions per arm    1.042 / 1.000            ✓ met
-    Minimum duration       8 of 14 days             6 days to go
-    Full weeks             day 8 — week 2 of 2      ends 04.10.2026
-  ```
-  Eine erfüllte Bedingung wird abgehakt und zählt nicht weiter hoch. `Evaluable on` ist das späteste der drei
-  Enddaten, bei den Conversions aus dem Tempo hochgerechnet. Daneben die Planwerte (Baseline, MDE, α, Power) und die
-  Futility-Warnung, wenn das Datum mehr als 6 Wochen nach dem Start liegt
-- **Hypothesis** und **Setup**: was konfiguriert wurde – Targeting (URL-Regel, Devices), Trigger, Allocation, Weights,
-  Salt, Varianten. Read-only, Link in den Editor
-- **Distribution**: was tatsächlich passiert ist – Donut der Visitors je Device, je Visitor-Typ, je Channel (DESIGN.md
-  §16). Setup erklärt Distribution, wenn sie schief aussieht
-- **Checks**: SRM-Badge, Bot-Anteil, Guardrail-Warnung, AuditLog-Marker für Edits an `RUNNING` (4.6)
-- **Tainted days**: Editor (Liste von Datumswerten, Datepicker, nur bei `RUNNING`/`PAUSED` editierbar, AuditLog
-  `UPDATED`) und die Anzeige "n days excluded: …". Die Sample-Size-Anzeige rechnet ohne diese Tage
-- **History**: Audit Log des Experiments
+Der **Stop-Dialog** verlangt `decision` (`WINNER` / `NO_DIFFERENCE` / `INVALID` / `ABORTED`) und `conclusion`
+(Freitext); ohne beides kein Stop. Ist die Stopp-Regel **noch nicht erfüllt**, warnt der Dialog deutlich – "6 days
+short of the stopping rule. Stopping now freezes the result without a verdict – permanently, there is no recompute." –
+blockiert aber nicht: Abbrechen muss immer möglich sein. Derselbe Dialog erklärt den Unterschied, den man sonst genau
+einmal falsch macht: **Pause** stoppt die Auslieferung und lässt das Ergebnis offen, **Stop** friert ein. Er ruft in
+einer Transaktion `evaluate()`, schreibt `ExperimentResult` (§3) und setzt erst dann `ENDED`. Für `ENDED` liest die
+ganze Seite **ausschließlich** den Snapshot ("Frozen on <date>, stats v<x>"), kein Recompute, kein Explore-Modus.
 
-**Tab 2 – Goals.** Pro Goal (CR, RPV, AOV) eine aufklappbare Karte, die Primärmetrik ist mit einem Stern markiert und
-zuerst offen.
-- Zugeklappt: Varianten-Tabelle – visitors, orders, CR, RPV, AOV, lift, CI. **p-value nur in der Karte der
-  Primärmetrik** (4.8: Urteil nur auf der Primärmetrik)
-- Aufgeklappt: die vier Charts nach Vertrag 4.9 mit Umschalter **Daily / Cumulative**
-- **Zähler live**: Auto-Refresh 60 s, "updated n seconds ago"
-- Filterleiste: Datums-Range (Explore, ADR-0034)
+**Tab 1 – Overview.** Der einzige Tab ohne Filter, weil hier das Urteil steht. Reihenfolge: Zahlen, dann Status, dann
+Kontext, dann Prüfungen.
+
+1. **Performance-Tabelle** – **eine** Gesamttabelle mit allen Goals, nicht nur der Primärmetrik:
+   Variant · Visitors · Orders · Conversions · Conv. rate ★ · Rev./visitor · AOV · Revenue.
+   - Primärmetrik über **Schriftgröße und leicht hinterlegte Spalte** hervorgehoben, nicht über Zusatztext
+   - **Lift klein unter dem Wert** ("+11,6 % vs A"), keine eigene Spalte. Vor erfüllter Stopp-Regel **neutral grau,
+     nie grün oder rot**
+   - **Keine CI-Spalte**, solange der Wert gesperrt ist; danach steht das CI klein unter dem Lift. Gesperrte Werte
+     bekommen nie eine eigene Spalte (§10)
+   - p-Wert nur für die Primärmetrik (4.8) und nur bei erfüllter Regel
+   - Horizontaler Scroll im **eigenen** Container, erste Spalte bleibt stehen. Die Seite scrollt nie horizontal
+   - **Dieselbe Komponente** wie die Tabellen der Segment-Tabs, nur mit anderer Zeilendimension
+2. **Verdict-Statuszeile** – schmal, direkt unter der Tabelle, solange die Stopp-Regel offen ist:
+   `Not yet conclusive (?) · ▓▓▓░░░░ · <Fortschritt> · est. 06.10.2026`, rechts „Winner & significance unlock at …".
+   - Der Fortschritt bezieht sich auf den **kleineren Arm**
+   - Planwerte (Baseline, MDE, α, Power) und Begründung im **Tooltip**, nicht sichtbar
+   - Nach erfüllter Regel wird daraus die volle Verdict-Karte *(noch nicht designt)*
+   - **Inhalt der Zeile richtet sich nach ADR-0036**, nicht nach einer Visitor-Zahl: Status der drei Bedingungen
+     (Conversions pro Arm · Mindestlaufzeit · volle Wochen) und `evaluableOn`. Der Figma-Stand zeigt hier noch
+     „40 % of 12.000 visitors per arm" – das ist die abgelöste `plannedSampleSize` und im Design nachzuziehen
+3. **Distribution** und **Hypothesis / Setup** nebeneinander:
+   - Donuts der Visitors je Device und je Channel. Im Device-Donut **keine `unknown`-Zeile** (Visitors sind nie
+     unknown, 4.10). Channel-Donut: **Top 4 plus „Other · n groups"**, vollständige Liste im Channels-Tab. Keine
+     Erklärzeilen. Sichtbar ist **Prozent oder absolute Zahl**, nicht beides – das andere im Hover
+   - Setup read-only: Key, Targeting, Trigger, Allocation, Weights, Salt, Varianten. Link in den Editor
+4. **Checks** und **History**:
+   - SRM-Badge, Bot-Anteil, Guardrail-Warnung, AuditLog-Marker für Edits an `RUNNING` (4.6)
+   - Der **Tainted-Days-Editor** (Datums-Chips, „+ Add day", nur bei `RUNNING`/`PAUSED`, AuditLog `UPDATED`) steckt
+     **in der Checks-Liste**, kein eigener Block
+   - History: Audit Log des Experiments
+   - **Keine Sparklines.** Außer den Donuts gibt es auf Overview keine Charts
+
+**Tab 2 – Goals.** Nur die **Charts**, keine eigene Variantentabelle – die steht auf Overview. Pro Goal (CR, RPV, AOV)
+eine aufklappbare Karte, die Primärmetrik mit Stern markiert und zuerst offen; darin die vier Serien nach Vertrag 4.9
+mit Umschalter **Daily / Cumulative**. Filterleiste: Datums-Range (Explore, ADR-0034).
 
 **Tabs 3–5 – Devices · Visitors · Channels.** Alle drei identisch aufgebaut, Dimensionen nach Vertrag 4.10.
 - **Distribution**: Donut der Visitors über die Werte der Dimension
-- **Daily performance**: Liniendiagramm, eine Linie pro Variante, Metrik über Dropdown wählbar, Daily/Cumulative wie
-  in 4.9, plus Umschalter über die Segmentwerte ("All devices / Mobile / Desktop / Tablet / Unknown")
-- **Performance-Tabelle**: pro Segmentwert zwei Zeilen (Variante und Original) mit visitors, conversions, CR, orders,
-  revenue, AOV, RPV und Improvement. Die Segmentzeilen summieren sich auf die Gesamtwerte, inklusive `unknown` bzw.
-  `unassigned`
+- **Daily performance**: Liniendiagramm, eine Linie pro Variante, Metrik über Dropdown, Daily/Cumulative wie in 4.9,
+  plus Umschalter über die Segmentwerte
+- **Performance-Tabelle**: pro Segmentwert zwei Zeilen (Variante und Original), dieselbe Komponente wie auf Overview.
+  Die Segmentzeilen summieren sich auf die Gesamtwerte, inklusive `unknown` bzw. `unassigned`
 - **Kein p-value, kein CI, kein Winner** (ADR-0034). Improvement erst ab **100 Visitors und 25 Conversions pro Arm**,
-  darunter ein Strich mit Tooltip "too few"
+  darunter ein Strich
 - Filterleiste: Datums-Range und die **eigene** Dimension. Keine Cross-Filter (4.10)
-- Unter der Channels-Tabelle steht der Pflichthinweis zur Abweichung von Shopify Analytics (4.10)
+- Unter der Channels-Tabelle steht der **sichtbare** Pflichthinweis zur Abweichung von Shopify Analytics (4.10). Das
+  ist die eine Ausnahme von „keine Fußnoten" – §10 sieht sie ausdrücklich vor: ein Vertrag schlägt eine Content-Regel
 
 **Querschnitt.**
-- Solange ein Filter aktiv ist, sind p-Wert, CI, `significant`, Winner, Sample-Size-Fortschritt und SRM-Badge
-  **ausgeblendet** mit dem Hinweis "Exploratory view – no verdict" (ADR-0034)
-- Jede Tabelle und jedes Chart hat einen Leerzustand ("No data yet") und einen Zu-wenig-Zustand ("too few")
-- Alle erklärungsbedürftigen Begriffe tragen den Tooltip aus dem Glossar (5a). Pflicht mindestens für: New/Returning
-  Visitor · Channel-Gruppen · `unknown` Device · Visitors vs. Conversions vs. Orders · Conversion Rate · RPV · AOV
-  (inkl. der Warnung aus 4.8) · Sample Size · SRM · Bot-Anteil · Tainted Days · Daily vs. Cumulative (inkl.
-  Expositions-Tag-Regel) · "Exploratory view – no verdict"
+- **Laden ohne Polling** (§10): beim Öffnen laden, bei Rückkehr in den Tab neu laden, **Refresh-Button mit
+  „Updated n s ago"**. Kein Auto-Refresh
+- Solange ein Filter aktiv ist, sind p-Wert, CI, `significant`, Winner, Stopp-Regel-Fortschritt und SRM-Badge
+  **ausgeblendet** mit dem Hinweis „Exploratory view – no verdict" (ADR-0034)
+- Jede Tabelle und jedes Chart hat einen Leerzustand („No data yet") und einen Zu-wenig-Zustand („too few")
+  *(noch nicht designt)*
+- **Tooltips nur nach DESIGN.md §10**, einer pro Begriff an der ersten Stelle, Texte aus dem Glossar-Modul (5a).
+  **Ja**: Not yet conclusive / Stopp-Regel · SRM · Guardrail · Tainted days · Key · Salt · Visitor type · Channel ·
+  Conversions vs. Orders · Daily vs. Cumulative · „Exploratory view – no verdict". **Nein**: Spaltenköpfe, Primary
+  metric, Device-Werte, Bot traffic, Code edits, Legendenzeilen. Die **AOV-Warnung aus 4.8** bleibt, wenn AOV die
+  Primärmetrik ist – die verlangt der Vertrag
+- **Keine Fußnoten und Erklärzeilen** unter Tabellen und Charts; Inhalt gehört in Tooltips. Ausnahme wie oben
 - Charts und Segment-Tabellen werden **deferred** per `useFetcher` aus Resource-Routes geladen, Skeleton statt leerer
-  Fläche (DESIGN.md)
-- Breite Tabellen scrollen in ihrem eigenen Container; die Seite scrollt nie horizontal
+  Fläche
+- DESIGN.md-Bausteine werden **über ihre Abschnittsnamen** referenziert, nie über Zeilennummern: Segmented Tabs ·
+  DateRange-/Dropdown-Trigger · Tooltip · Accordion/Chevron · Chart-Tooltip und Legende · Content-Regeln (§10)
+
+**Vor 5b zu klären** (siehe ADR-0037):
+- **Designsystem**: Das Figma nutzt Lab-Dark (Slate/Emerald, Geist, Hex-Werte), DESIGN.md schreibt daisyUI-Tokens mit
+  Mint vor und verbietet Hex in Klassen. **Entscheidung Joel**, blockiert den Bau
+- **Tabs-Variante**: Segmented (DESIGN.md) oder die neue Underline-Variante aus dem Figma
+- **Fehlende DESIGN.md-Rezepte**: Donut (erlaubt, aber kein Rezept) und ein **gestyltes Tooltip-Popover** – das
+  beschriebene native `title` lässt sich nicht stylen und funktioniert auf Touch nicht
+- **Noch nicht designt**: volle Verdict-Karte nach erfüllter Stopp-Regel, Leer- und „too few"-Zustände
 
 #### 5c – API + CLI
 
@@ -973,7 +997,11 @@ zuerst offen.
 - Edit an `RUNNING`: Warnung erscheint, AuditLog-Eintrag, Metafield sofort aktualisiert, Marker im Report
 - Targeting-Felder bei `RUNNING` disabled
 - Results mit unerfüllter Stopp-Regel zeigen keine p-values; Sekundärmetriken nie
-- Der Stopping-rule-Block zeigt alle drei Bedingungen einzeln plus `Evaluable on`; 1.000 Conversions nach 8 Tagen → Conversions abgehakt, Datum steht auf Tag 14
+- Die Verdict-Statuszeile zeigt den Status aller drei Bedingungen plus `Evaluable on`; 1.000 Conversions nach 8 Tagen → Conversions abgehakt, Datum steht auf Tag 14. Der Fortschritt bezieht sich auf den kleineren Arm
+- Overview trägt **eine** Gesamttabelle mit allen Goals; der Goals-Tab hat nur Charts. Beide Tabellen (Overview und Segment-Tabs) sind dieselbe Komponente
+- Vor erfüllter Stopp-Regel: keine CI-Spalte, Lifts neutral grau, Verdict als schmale Zeile unter der Tabelle
+- Device-Donut auf Overview hat keine `unknown`-Zeile; die Devices-Tabelle hat sie
+- Keine Fußnote unter irgendeiner Tabelle außer dem Pflichthinweis unter der Channels-Tabelle (4.10)
 - Stopp-Regel bei `RUNNING` lockern ist nicht möglich, verschärfen schon; beides im AuditLog
 - Stop-Dialog bei unerfüllter Regel warnt und lässt trotzdem `ABORTED` zu; die Pause/Stop-Unterscheidung steht im Dialog
 - Header mit Start/Pause/Stop ist auf **allen fünf Tabs** sichtbar und funktionsfähig
@@ -986,14 +1014,14 @@ zuerst offen.
 - Stop ohne `decision` ist nicht möglich
 - Stop erzeugt genau eine `ExperimentResult`-Row; danach eine Testbestellung mit Attribut → Results unverändert (Snapshot), Live-Query wird nicht mehr aufgerufen
 - Tag als tainted markieren → Visitors/Orders in Results sinken um die Exposures dieses Tages, Hinweis sichtbar
-- Testbestellung im Dev Store erscheint innerhalb von 60 s in Results, ohne Cron
+- Testbestellung im Dev Store erscheint in Results **nach Refresh oder Tab-Fokus**, ohne Cron; es gibt **kein** Polling
 - Derselbe Workflow per CLI funktioniert ebenfalls
 - Dark- und Light-Theme, Mobile-Breite ohne horizontales Scrollen, keine Verstöße gegen DESIGN.md §9
 
 **Session-Prompts (EN)** – drei Sessions:
 > **5a** Read CLAUDE.md, docs/plan.md (4.6, WP5a) and docs/DESIGN.md in full. Build the dashboard pages Shops, Users, Experiments list and Experiment create/edit using only the components and recipes from DESIGN.md (no other UI libraries; CodeMirror 6 is the single allowed exception, for the JS and CSS fields). Implement the editing rule from contract 4.6 including the running-experiment warning, AuditLog entries and the report marker. Include the sample-size calculator in the form. Add the glossary module: one definition per term, every tooltip referencing it by key, no tooltip string inline in JSX. All UI text in English.
 
-> **5b** Read CLAUDE.md, docs/plan.md contracts 4.8, 4.9, 4.10 and WP5b, docs/DESIGN.md in full, and ADR-0025, ADR-0026, ADR-0033, ADR-0034, ADR-0035. Build the Results page as five tabs (Overview, Goals, Devices, Visitors, Channels) with a persistent header carrying the status, runtime and the Start/Pause/Stop actions on every tab. Overview holds the verdict and has no filters at all. The Goals tab has one collapsible card per goal with the four charts of contract 4.9 and a daily/cumulative toggle; p-values appear only on the primary metric and only once the stopping rule of ADR-0036 is met. Render the stopping rule as three separate conditions with their own status plus the projected `Evaluable on` date, not as a single progress bar, and make the stop dialog warn – without blocking – when the rule is not met yet, explaining that Pause stops serving while Stop freezes the result for good. Devices, Visitors and Channels are identical in structure per contract 4.10 – donut, daily performance chart, performance table – and never show a p-value, CI or winner; the improvement badge appears only from 100 visitors and 25 conversions per arm. Implement the explore mode exactly as ADR-0034 requires. Stopping freezes an ExperimentResult snapshot in the same transaction that sets ENDED, and ended experiments render from the snapshot only. Charts and segment tables load deferred through resource routes. Every explained term uses the glossary module from 5a. All UI text in English.
+> **5b** Read CLAUDE.md, docs/plan.md contracts 4.8, 4.9, 4.10 and WP5b, docs/DESIGN.md in full – especially §10 Content rules – and ADR-0025, ADR-0026, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037. Build the Results page as five tabs (Overview, Goals, Devices, Visitors, Channels) with a persistent header carrying the status, runtime and the Start/Pause/Stop actions on every tab. Overview holds the verdict and has no filters at all. The Goals tab has one collapsible card per goal with the four charts of contract 4.9 and a daily/cumulative toggle; p-values appear only on the primary metric and only once the stopping rule of ADR-0036 is met. Render the stopping rule per ADR-0037 as a narrow status line under the performance table – not a card – carrying the status of all three conditions and the projected `Evaluable on` date, with the planning values in a tooltip and progress measured on the smaller arm. Overview carries one full table across all goals; the Goals tab has charts only. Before the rule is met there is no CI column at all and lifts stay neutral grey. Do not poll: load on open, reload on tab focus, refresh button with "Updated n s ago". Make the stop dialog warn – without blocking – when the rule is not met yet, explaining that Pause stops serving while Stop freezes the result for good. Devices, Visitors and Channels are identical in structure per contract 4.10 – donut, daily performance chart, performance table – and never show a p-value, CI or winner; the improvement badge appears only from 100 visitors and 25 conversions per arm. Implement the explore mode exactly as ADR-0034 requires. Stopping freezes an ExperimentResult snapshot in the same transaction that sets ENDED, and ended experiments render from the snapshot only. Charts and segment tables load deferred through resource routes. Every explained term uses the glossary module from 5a. All UI text in English.
 
 > **5c** Read docs/plan.md 4.7 and WP5c. Implement the bearer-token JSON API (tokens generated per user in the dashboard, stored as hashes, expiring after 90 days, shop-scoped routes) and the sh-ab CLI in lib/cli. The CLI must use exactly the same service layer as the dashboard – no duplicated business logic. `push` on a RUNNING experiment requires `--force` and produces the same AuditLog entry as a UI edit.
 

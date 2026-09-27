@@ -7,8 +7,15 @@ diese Tokens, Klassen und Rezepte.** Nicht improvisieren, keine anderen UI-Libra
 Diese Datei beschreibt **Bausteine**, keine Seiten. Was auf einer konkreten Seite steht, steht in
 `docs/plan.md` §5 – die Results-Seite mit ihren fünf Tabs in **WP5b**, die zugrunde liegenden Definitionen in den
 Verträgen 4.8 (Zählweise), 4.9 (Zeitreihen) und 4.10 (Segmente). Für die Results-Seite gebraucht werden aus dieser
-Datei: Segmented Tabs (§390), DateRange-/Dropdown-Trigger (§433), Tooltip-„?" (§506), Accordion/Chevron (§533),
-Chart-Tooltip und Legende (§543) sowie Area-, Sparkline- und Donut-SVGs (§1).
+Datei die Rezepte **Segmented Tabs**, **DateRange-/Dropdown-Trigger**, **Tooltip**, **Accordion/Chevron**,
+**Chart-Tooltip & Legende** und die Chart-SVGs, dazu **§10 Content-Regeln**.
+
+> **Verweise immer über den Abschnittsnamen, nie über eine Zeilennummer.** Frühere Angaben wie „§390" oder „§506"
+> waren Zeilennummern und sind mit jeder Ergänzung verrutscht.
+>
+> **Zwei Rezepte fehlen und werden für WP5b gebraucht** (ADR-0037): ein **Donut** – §1 erlaubt ihn, ein Rezept gibt es
+> nicht – und ein **gestyltes Tooltip-Popover**; das unten beschriebene native `title` lässt sich nicht stylen und
+> funktioniert auf Touch nicht.
 
 ---
 
