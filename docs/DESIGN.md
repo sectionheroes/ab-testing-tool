@@ -4,6 +4,12 @@ Design-Spec für neue Software, die exakt wie das Sectionheroes-Admin-Dashboard 
 Diese Datei ist als Anweisung für Claude Code gedacht: **Halte dich beim Bauen von UI strikt an
 diese Tokens, Klassen und Rezepte.** Nicht improvisieren, keine anderen UI-Libraries.
 
+Diese Datei beschreibt **Bausteine**, keine Seiten. Was auf einer konkreten Seite steht, steht in
+`docs/plan.md` §5 – die Results-Seite mit ihren fünf Tabs in **WP5b**, die zugrunde liegenden Definitionen in den
+Verträgen 4.8 (Zählweise), 4.9 (Zeitreihen) und 4.10 (Segmente). Für die Results-Seite gebraucht werden aus dieser
+Datei: Segmented Tabs (§390), DateRange-/Dropdown-Trigger (§433), Tooltip-„?" (§506), Accordion/Chevron (§533),
+Chart-Tooltip und Legende (§543) sowie Area-, Sparkline- und Donut-SVGs (§1).
+
 ---
 
 ## 1. Stack

@@ -1,6 +1,6 @@
 # ADR-0032: Order → Visitor in der Auswertung: Identität ist `Order.customerId`, sonst die Order selbst
 
-Datum: 2026-09-23 · Status: entschieden
+Datum: 2026-09-23 · Status: ersetzt durch ADR-0033 (die Identitäts-Logik bleibt als Fallback für Orders ohne `_ab_v`)
 
 ## Kontext
 Vertrag 4.8 definiert die Conversion Rate auf **konvertierenden Visitors**: „Ein Visitor mit drei Orders konvertiert

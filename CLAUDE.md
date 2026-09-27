@@ -36,7 +36,9 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
 
 ## Non-negotiable rules
 - Contracts in docs/plan.md §4 (cart attribute format, metafield schemas, bucketing, exposure payload, editing rule)
-  never change. If a task seems to require changing them, stop and ask.
+  never change. If a task seems to require changing them, stop and ask. A *new* contract may be added next to an
+  existing one as long as it leaves that one's format and semantics alone – that is how 4.1b, 4.9 and 4.10 came to be.
+  Exactly two real amendments are sanctioned, both by ADR: 4.4 (ADR-0028) and the `n` field in 4.5 (ADR-0035).
 - UI outside /app/*: follow docs/DESIGN.md strictly – its tokens, classes and recipes. No Polaris, shadcn, MUI, Radix, icon or chart
   libraries. All UI text in English (this overrides DESIGN.md §8, which says German). Numbers and currency formatted
   `de-DE` (1.234,56 €) unless docs/plan.md §8 says otherwise.
@@ -59,10 +61,29 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
 - Raw SQL against a DateTime column binds its bounds through `utcTimestamp()` (app/services/stats.server.ts). A plain
   `${date}` parameter is sent as `timestamptz` and gets reinterpreted in the session timezone, which differs between a
   dev machine and Render – it looks right locally and is wrong in production.
-- The dashboard never shows p-values or a winner before plannedSampleSize is reached. Counts and revenue are live
-  (query, not DailyStat); only the verdict waits.
-- One conversion is one identity: `Order.customerId`, else the order itself (ADR-0032) – nothing links an order to a
-  visitorId. Per-device order numbers only exist for orders linkable to an exposure; the UI must say so (WP5).
+- The dashboard never shows p-values or a winner before the stopping rule of ADR-0036 is met: at least
+  `minConversionsPerArm` converting visitors per arm (default 1,000), at least `minDurationDays` days (default 14),
+  and only on a full-week boundary counted from `startedAt` in the shop timezone – never from Monday. Counts and
+  revenue are live (query, not DailyStat); only the verdict waits. `significant = stoppingRuleMet && p < alpha` is not
+  negotiable, and the rule may only be tightened while RUNNING (contract 4.6) – loosening it would unlock a p-value.
+  The tool never stops a test by itself; a failing futility projection is a warning, nothing more.
+- One conversion is one visitor: the snippet carries the visitorId in its own cart attribute `_ab_v` (contract 4.1b)
+  and the aggregation joins orders to exposures through it (ADR-0033, supersedes ADR-0032). `_ab_v` never carries the
+  variant – that stays in `_ab` (4.1), which is unchanged. Orders without `_ab_v` fall back to the ADR-0032 identity
+  (`Order.customerId`, else the order itself) and land in the `unknown` device bucket. `unknown` is a visible fourth
+  bucket: the device rows always sum to the totals.
+- Report time series follow contract 4.9: four charts per goal, a conversion counts on the day its visitor was first
+  exposed (shop timezone), cumulative ratios are computed from cumulative numerators and denominators, and there is no
+  certainty-over-time chart. Charts come from the live query with a day dimension, never from DailyStat.
+- A date range or segment filter on Results is explore-only (ADR-0034): it changes charts and raw numbers, and while
+  it is active the p-value, CI, significance, winner, sample-size progress and SRM badge are hidden, not recomputed.
+  The Overview tab has no filters at all, because the verdict lives there.
+- The segment dimensions of contract 4.10 (device, visitor type, channel) never show a p-value, CI or winner, and the
+  improvement badge appears only from 100 visitors and 25 conversions per arm. No cross-filters between dimensions.
+  Channel is derived from `Exposure.referrer`/`utm` at exposure time – last touch, and it will not match Shopify
+  Analytics; the UI has to say so under the table.
+- Every explained term in the UI gets its text from the glossary module, never inline in JSX – one definition per
+  term, so the same term cannot drift between pages.
 - Editing a RUNNING experiment follows contract 4.6: code fields allowed with warning + AuditLog + report marker;
   targeting, allocation, weights and salt are locked.
 - Snippet budget: 8 KB gzip. Snippet errors must never break the merchant's page – every variant runs in try/catch,
