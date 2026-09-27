@@ -796,6 +796,17 @@ Zwischen WP4 und WP5, weil WP5 die Device-Zahlen und die Zeitreihen anzeigt und 
   Kombination `day × dimension` (für die Daily-Performance-Charts der Segment-Tabs). Tageszuordnung immer nach
   Expositions-Tag in `Shop.timezone` (4.9). Ein Lasttest je Dimension, Ziel < 500 ms bei 1 Mio. Exposures wie die
   Hauptaggregation; Indizes entsprechend ergänzen.
+
+  **Die drei Fallen aus WP4 gelten hier unverändert** – sie haben die Hauptaggregation von 528 s auf unter 400 ms
+  gebracht und die Tagesdimension ist genau der Ort, an dem sie wieder zuschlagen:
+  1. **Kein Lateral-Join gegen eine materialisierte CTE.** Die Exposure-Suche je Order direkt gegen `"Exposure"`,
+     damit `Exposure_customerId_idx` greift – gegen eine CTE mit 1 Mio. Zeilen wird daraus 30 k × Full Scan.
+  2. **Tage als UTC-Intervall, nie `to_char(...)`.** Der String-Vergleich je Zeile kostete ~130 ms und verhindert den
+     Index-Only-Scan. `app/services/timezone.ts` rechnet den lokalen Tag in sein UTC-Intervall um (DST getestet).
+     Grenzen immer über `utcTimestamp()` binden, sonst schickt Prisma `timestamptz` und die Session-Zeitzone
+     verschiebt das Ergebnis – lokal anders als auf Render.
+  3. **Nach dem Bulk-Load `VACUUM`**, bevor gemessen wird: der Index-Only-Scan braucht die Visibility Map, sonst ist
+     er langsamer als der Seq Scan (136 ms → 43 ms).
 - **Stopp-Regel statt `plannedSampleSize`** (ADR-0036): Migration auf `minConversionsPerArm` / `minDurationDays` /
   `requireFullWeeks`. `evaluate()` ersetzt `sampleSizeReached: boolean` durch ein Objekt mit **Status je Bedingung**
   (`met`, aktueller Wert, Zielwert, Enddatum) plus `met: boolean` insgesamt und `evaluableOn` – dem spätesten der
@@ -803,7 +814,9 @@ Zwischen WP4 und WP5, weil WP5 die Device-Zahlen und die Zeitreihen anzeigt und 
   `Shop.timezone`, nicht ab Montag. `significant = stoppingRuleMet && pValue < alphaAdjusted` bleibt wortgleich.
   Futility-Warnung, wenn `evaluableOn` mehr als 6 Wochen nach `startedAt` liegt. Kein Auto-Stop.
 - **Sample-Size-Rechner beidseitig** in `lib/stats`: MDE → Conversions und Visitors, und Conversions → impliziter MDE
-  (`mde ≈ 2,8·√(2/C)`). Für RPV getrennt ausgewiesen, weil die Umsatzstreuung dort deutlich höher liegt.
+  (`mde ≈ 2,8·√(2/C)`). Für **RPV getrennt und konservativ**: WP4 hat gemessen, dass das ausgegebene n auf
+  realistischem Umsatz nur **71,6 % statt 80 % Power** liefert (`lib/stats/README.md`, durch einen Test festgenagelt).
+  Der Aufschlag wird aus diesem Test abgeleitet, nicht geschätzt, und das UI weist den RPV-Wert als Untergrenze aus.
 - `STATS_VERSION` erhöhen (die CR-Definition **und** die Auswertbarkeits-Regel ändern sich), `lib/stats/README.md`
   fortschreiben.
 

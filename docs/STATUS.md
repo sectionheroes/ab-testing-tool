@@ -3,8 +3,13 @@ Stand: 2026-09-23
 
 ## Aktuell
 WP: **WP4 fertig** (Stats-Engine, A/A-Simulation, Live-Aggregation, Snapshot, DailyStat-Job), Branch `wp4-stats`,
-PR gegen `main` offen. Rein lokal – kein Dev-Store, kein Shopify-Call. Nächste Session: **WP5** (Dashboard, Editor,
-API, CLI). WP-R läuft parallel.
+PR gegen `main` offen. Rein lokal – kein Dev-Store, kein Shopify-Call.
+
+**Planungsstand 27.09. (nicht aus einer Dev-Session, sondern aus dem Figma-Review):** plan.md steht auf **v4.2**, vier
+neue ADRs (0033–0036), neue Verträge 4.1b/4.9/4.10 und geändertes 4.5/4.6. Nächste Session ist deshalb **nicht WP5,
+sondern WP4.1** – Visitor-Bindung der Orders (`_ab_v`), Segment-Dimensionen, generische Breakdown-Query und die
+Stopp-Regel statt `plannedSampleSize`. Danach WP5 in drei Sessions (5a Dashboard/Editor, 5b Results, 5c API/CLI).
+WP-R läuft parallel. Details im v4.2-Changelog von plan.md.
 
 ## Abnahme WP4
 | # | Item | Ergebnis |

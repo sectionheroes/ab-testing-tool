@@ -12,7 +12,8 @@ an drei Stellen Genauigkeit:
 - **Attributionsfenster**: Nicht verknüpfbare Orders nutzen `Experiment.startedAt` als Untergrenze statt des echten
   `Exposure.firstSeenAt`.
 - **Device**: Orders bekommen ein Device nur, wenn sie über `Exposure.customerId` (Login-Link, 4.5) verknüpfbar sind.
-  Für Gast-Orders – die Mehrheit – gibt es keins.
+  Für Gast-Orders gibt es keins. Der WP4-Lasttest hat die Größenordnung gemessen: **`deviceLinkRate` 31 %** – bei gut
+  zwei Dritteln der Orders fehlt das Device (STATUS 23.09.).
 
 Der dritte Punkt wurde bei der WP5-Planung zum Blocker: die Results-Seite soll nach Device filterbar sein (Joel,
 23.09.), und eine Device-Aufteilung, in der Visitors exakt und Conversions weitgehend leer sind, ist als

@@ -61,8 +61,17 @@ auswertbar (`stoppingRuleMet`), wenn **alle gesetzten** Bedingungen erfüllt sin
   setzen und sich so einen p-Wert freischalten – die Hintertür, die die ganze Fixed-Horizon-Logik aushebelt.
 
 Der Sample-Size-Rechner übersetzt weiterhin in beide Richtungen: MDE eingeben → Conversions und Visitors sehen, oder
-Conversions eingeben → den implizierten MDE sehen. Für **RPV** wird der MDE getrennt ausgewiesen, weil die
-Umsatzverteilung stärker streut: 1.000 Conversions pro Arm reichen dort eher für 20–25 % als für 12,5 %.
+Conversions eingeben → den implizierten MDE sehen.
+
+Für **RPV** wird der MDE getrennt ausgewiesen, und zwar konservativ. WP4 hat gemessen (STATUS 23.09.,
+`lib/stats/README.md`): auf realistischem, zero-inflated lognormalem Umsatz liefert das n, das der Planer ausgibt,
+nur **71,6 % statt 80 % Power**. Zwei Gründe, beide in der von plan WP4 vorgegebenen Formel angelegt – sie unterstellt
+gleiche σ in beiden Armen (ein echter RPV-Lift ist aber ein größerer Warenkorb, also mehr Streuung), und die
+Varianznäherung `Var(RPV) ≈ CR·E[AOV²] − (CR·AOV)²` rechnet mit höchstens einer Order je Visitor.
+
+Der Planer ist für RPV also eine **Untergrenze, keine Zusage**. Das UI muss das sagen und aufrunden; die genaue
+Aufschlagshöhe legt WP4.1 anhand des festgenagelten Tests fest, statt sie zu schätzen. (Mein früherer Richtwert
+„20–25 %" war geraten – die gemessene Zahl ersetzt ihn.)
 
 ## Alternativen
 - **Alles beim Alten (`plannedSampleSize` in Visitors)** – bildet die tatsächliche Arbeitsweise nicht ab und braucht

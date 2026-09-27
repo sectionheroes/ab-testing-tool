@@ -42,6 +42,8 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
 - UI outside /app/*: follow docs/DESIGN.md strictly – its tokens, classes and recipes. No Polaris, shadcn, MUI, Radix, icon or chart
   libraries. All UI text in English (this overrides DESIGN.md §8, which says German). Numbers and currency formatted
   `de-DE` (1.234,56 €) unless docs/plan.md §8 says otherwise.
+- Content on every dashboard page (Figma and code) follows docs/DESIGN.md §10: as little as possible, as much as
+  needed, readable for a layperson; explanations in tooltips only where a layperson would stumble, never footnotes.
 - UI on /app/* (embedded merchant page): Polaris Web Components only (`<s-page>`, `<s-section>`, `<s-button>` …),
   no Tailwind/daisyUI, no DESIGN.md components, and never `<s-button variant="primary">` – secondary (white) only.
 - Money always comes from `*_price_set.shop_money.amount`. Never `total_price`, never presentment currency.

@@ -594,3 +594,51 @@ Chevron: 16px SVG `m9 6 6 6-6 6`, `shrink-0 text-base-content/40 transition-tran
 - Kein `badge-soft` / `alert-soft` mit `primary` oder `secondary`.
 - Keine `shadow-*` auf Cards, keine `rounded-full` Buttons, keine Gradienten (außer bewusst als AI-Feature-Button).
 - Keine zusätzlichen UI-Libraries (Polaris, shadcn, Radix, MUI, Headless UI).
+
+---
+
+## 10. Content-Regeln (Joel, 27.09.2026 – gilt für jede Seite, in Figma und im Code)
+
+Leitsatz: **So wenig Content wie möglich, so viel wie nötig.** Ein Laie ohne Statistik-Hintergrund muss die Seite
+lesen können. Vor jeder Seite beim Minimum anfangen und jede Zeile, Spalte und jedes Badge fragen: „Braucht ein Laie
+das hier?“ Entstanden am Results-Overview (Figma: `Results / a-running-no-verdict / dark / lab-slate · v3`).
+
+**Reihenfolge**
+- Zahlen zuerst, dann Kontext (Distribution, Hypothese/Setup), dann Checks und History.
+
+**Text**
+- Keine Fußnoten unter Tabellen, keine Erklärzeilen unter Charts, keine Untertitel, die nur beschreiben, was man sieht.
+- Kein Element ohne Funktion (z. B. ein Hinweis, der nur erklärt, warum es hier keine Filter gibt).
+- Kein Jargon im sichtbaren Text („excluded from n“ → „not counted in any numbers“).
+- Ausnahme: Text, den ein Vertrag ausdrücklich sichtbar verlangt (z. B. der Channels-Hinweis aus 4.10), bleibt sichtbar.
+  Kollidiert das mit dieser Regel, den Konflikt ansprechen statt ihn in einen Tooltip zu verschieben.
+
+**Tooltips („?“) – nur, wo ein Laie wirklich stolpert**
+- Ja: Fachbegriffe und Begriffe mit überraschender Definition – z. B. Sample Size / „Not yet conclusive“, SRM,
+  Guardrail, Tainted days, Key, Salt, Visitor type („new“ = neu im Shop), Channel (Last Touch, weicht von Shopify
+  Analytics ab), Conversions vs. Orders.
+- Nein: selbsterklärende Labels – Spaltenköpfe wie Visitors, Orders, Revenue, AOV, Device, Mobile/Desktop, Primary
+  metric, Bot traffic, Code edits, Legendenzeilen.
+- Ein Tooltip pro Begriff an der ersten Stelle, nicht an jeder Legendenzeile darunter. Texte weiter aus dem
+  Glossar-Modul.
+
+**Tabellen und Daten**
+- Eine Gesamttabelle statt mehrerer Teiltabellen; wird sie zu breit, scrollt sie horizontal in ihrem eigenen
+  Container, die erste Spalte bleibt stehen.
+- Gesperrte oder leere Werte („unlocks at …“) bekommen keine eigene Spalte – die Spalte erscheint, wenn es den Wert gibt.
+- Hervorhebung der Primärmetrik über Größe und eine leicht hinterlegte Spalte, nicht über zusätzlichen Text.
+- Abgeleitetes klein unter dem Wert (Lift „+11,6 % vs A“), nicht als eigene Spalte. Vor erreichter Sample Size
+  bleiben Lifts neutral grau – nie grün/rot.
+- Keine Deko-Charts (Sparklines in Tabellen), wenn der richtige Chart in einem anderen Tab liegt.
+- Keine Doppelangaben: Prozent **oder** absolute Zahl sichtbar, das andere im Hover.
+- Keine Badges in Tabellenzeilen, die schon an anderer Stelle stehen (Code-Edit steht in Checks/History).
+
+**Status**
+- Vorläufiges ist klein: ein nicht finaler Status (Verdict vor Sample Size) ist eine schmale Zeile; groß wird er erst,
+  wenn er etwas aussagt.
+
+**Technische Infos**
+- IDs und Technisches (Experiment-Key, Salt) nie in den Header, sondern ins Setup bzw. zugeklappte Details.
+
+**Laden**
+- Kein Auto-Polling. Laden beim Öffnen, neu laden bei Rückkehr in den Tab, Refresh-Button mit „Updated n s ago“.
