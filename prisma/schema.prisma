@@ -27,6 +27,7 @@ enum AuditAction {
   UPDATED
   STATUS_CHANGED
   CODE_CHANGED_WHILE_RUNNING
+  STOPPING_RULE_CHANGED // contract 4.6 as amended by ADR-0036 – tighten only while RUNNING
 }
 
 enum ExperimentType {
@@ -94,33 +95,38 @@ model Shop {
 }
 
 model Experiment {
-  id                String             @id @default(cuid())
-  shopId            String
-  shop              Shop               @relation(fields: [shopId], references: [id])
-  key               String // slug, unique per shop – contract 4.1 `^[a-z0-9-]+$`
-  name              String
-  hypothesis        String?
-  type              ExperimentType     @default(CODE)
-  status            ExperimentStatus   @default(DRAFT)
-  allocation        Float              @default(1.0)
-  salt              String // random, fixed after creation (contract 4.4)
-  targeting         Json // contract 4.2
-  trigger           Json // { type: "immediate" } | { type: "visible", selector }
-  hideUntilApplied  Boolean            @default(false)
-  primaryMetric     Metric             @default(CR)
-  plannedSampleSize Int? // per variant
-  startedAt         DateTime?
-  endedAt           DateTime?
-  decision          Decision? // mandatory on stop (WP5)
-  conclusion        String?
-  taintedDays       Json               @default("[]") // ["2026-10-03", …] – manual (ADR-0026), excluded by stats.server (WP4)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  variants          Variant[]
-  exposures         Exposure[]
-  attributions      OrderAttribution[]
-  dailyStats        DailyStat[]
-  result            ExperimentResult?
+  id                   String             @id @default(cuid())
+  shopId               String
+  shop                 Shop               @relation(fields: [shopId], references: [id])
+  key                  String // slug, unique per shop – contract 4.1 `^[a-z0-9-]+$`
+  name                 String
+  hypothesis           String?
+  type                 ExperimentType     @default(CODE)
+  status               ExperimentStatus   @default(DRAFT)
+  allocation           Float              @default(1.0)
+  salt                 String // random, fixed after creation (contract 4.4)
+  targeting            Json // contract 4.2
+  trigger              Json // { type: "immediate" } | { type: "visible", selector }
+  hideUntilApplied     Boolean            @default(false)
+  primaryMetric        Metric             @default(CR)
+  // Stopping rule (ADR-0036) – replaces the single, visitor-based `plannedSampleSize`. Every condition that is SET has
+  // to be met before there is a verdict; all of them off means never significant. While RUNNING the rule may only be
+  // tightened (contract 4.6) – loosening it would unlock a p-value by moving the goalposts below the current stand.
+  minConversionsPerArm Int?               @default(1000) // converting visitors per arm (4.8)
+  minDurationDays      Int?               @default(14) // calendar days since startedAt in Shop.timezone
+  requireFullWeeks     Boolean            @default(true) // only on multiples of 7 days FROM startedAt, never from Monday
+  startedAt            DateTime?
+  endedAt              DateTime?
+  decision             Decision? // mandatory on stop (WP5)
+  conclusion           String?
+  taintedDays          Json               @default("[]") // ["2026-10-03", …] – manual (ADR-0026), excluded by stats.server (WP4)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  variants             Variant[]
+  exposures            Exposure[]
+  attributions         OrderAttribution[]
+  dailyStats           DailyStat[]
+  result               ExperimentResult?
 
   @@unique([shopId, key])
   @@index([shopId, status])
@@ -172,6 +178,9 @@ model Exposure {
   customerId   String? // set via login link (4.5), nulled by customers/redact; never a bucketing input
   firstSeenAt  DateTime
   device       String // mobile | desktop | tablet
+  /// Contract 4.5 field `n` (ADR-0035): no valid `_shab_vid` was in cookie or localStorage at page load. null = the
+  /// snippet did not send it; the report shows those exposures as the `unknown` visitor type (4.10).
+  isNewVisitor Boolean?
   country      String?
   referrer     String?
   utm          Json?
@@ -186,6 +195,12 @@ model Exposure {
   // it inside the 500 ms budget of ADR-0019 once the table holds every shop's exposures. Index-only scans need the
   // visibility map, so the table has to stay vacuumed – autovacuum does that; after a bulk load, run VACUUM by hand.
   @@index([experimentId, variantId, device, isBot, firstSeenAt])
+  // Covers `breakdown()` (WP4.1, contract 4.9/4.10): one experiment, non-bot, a firstSeenAt range, grouped by variant
+  // and by the dimension. firstSeenAt sits third so it can be an index RANGE bound – in the index above it is last and
+  // therefore only a filter, which would mean scanning every exposure of the experiment per day. Carrying device and
+  // isNewVisitor makes the device and visitor-type breakdowns index-only out of the same index; the channel breakdown
+  // needs referrer and utm and has to visit the heap.
+  @@index([experimentId, isBot, firstSeenAt, variantId, device, isNewVisitor])
   @@index([customerId])
   @@index([shopId, firstSeenAt])
 }
@@ -260,12 +275,17 @@ model OrderAttribution {
   experiment   Experiment        @relation(fields: [experimentId], references: [id])
   variantId    String
   variant      Variant           @relation(fields: [variantId], references: [id])
+  /// Contract 4.1b: the `_ab_v` cart attribute – the visitorId the order was placed by, validated as a UUID v4 at
+  /// ingest. This is what makes "one conversion is one visitor" (4.8) literally true (ADR-0033). null when the order
+  /// carried no `_ab_v`; then the ADR-0032 identity fallback applies and the order lands in the `unknown` device bucket.
+  visitorId    String?
   source       AttributionSource
   createdAt    DateTime          @default(now())
 
   @@id([orderId, experimentId])
   @@index([experimentId, variantId])
   @@index([orderId])
+  @@index([visitorId])
 }
 
 model Refund {

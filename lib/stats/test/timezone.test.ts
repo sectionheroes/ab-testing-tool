@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localDayRangeUtc, timezoneOffsetMs } from "./timezone";
+import { localDayRangeUtc, timezoneOffsetMs } from "../timezone";
 
 const iso = (d: Date) => d.toISOString();
 

@@ -10,7 +10,8 @@
 import type { Prisma } from "@prisma/client";
 import { STATS_VERSION } from "../../lib/stats";
 import prisma from "../db.server";
-import { computeStatsFor, loadExperimentForStats, taintedDays, type Db, type ExperimentStats } from "./stats.server";
+import type { StoppingRuleConfig } from "../../lib/stats";
+import { computeStatsFor, loadExperimentForStats, stoppingRuleOf, taintedDays, type Db, type ExperimentStats } from "./stats.server";
 
 /** Schema version of the snapshot envelope itself (plan §3: starts at 1). Independent of STATS_VERSION. */
 export const SNAPSHOT_VERSION = 1;
@@ -22,7 +23,12 @@ export type FrozenSnapshot = {
   frozen: {
     hypothesis: string | null;
     primaryMetric: string;
-    plannedSampleSize: number | null;
+    /**
+     * The stopping rule the experiment was measured against (ADR-0036). Frozen with the rest of the context so a
+     * report from two years ago still says which thresholds its verdict was read at – the rule may be tightened while
+     * RUNNING (4.6), so the current row is not evidence of what applied at the end.
+     */
+    stoppingRule: StoppingRuleConfig;
     variants: { key: string; name: string; weight: number; isControl: boolean; js: string | null; css: string | null }[];
     targeting: Prisma.JsonValue;
     allocation: number;
@@ -75,7 +81,7 @@ export async function freezeExperimentResult(
     frozen: {
       hypothesis: experiment.hypothesis,
       primaryMetric: experiment.primaryMetric,
-      plannedSampleSize: experiment.plannedSampleSize,
+      stoppingRule: stoppingRuleOf(experiment),
       variants: experiment.variants.map((v) => ({
         key: v.key,
         name: v.name,

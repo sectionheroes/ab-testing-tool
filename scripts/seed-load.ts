@@ -18,7 +18,7 @@
  *   pnpm seed:load [exposures] [orders]
  */
 import prisma from "../app/db.server";
-import { computeExperimentStats } from "../app/services/stats.server";
+import { breakdown, computeExperimentStats, loadExperimentForStats } from "../app/services/stats.server";
 
 const EXPOSURES = Number(process.argv[2] ?? 1_000_000);
 const ORDERS = Number(process.argv[3] ?? 30_000);
@@ -56,7 +56,10 @@ async function main() {
       targeting: {},
       trigger: { type: "immediate" },
       primaryMetric: "CR",
-      plannedSampleSize: Math.floor(EXPOSURES / 4),
+      // Stopping rule (ADR-0036) – met by construction, so the load fixture measures the query, not the gate.
+      minConversionsPerArm: 1,
+      minDurationDays: null,
+      requireFullWeeks: false,
       startedAt,
       variants: {
         create: [
@@ -82,13 +85,23 @@ async function main() {
   await t("exposures", () =>
     prisma.$executeRawUnsafe(
       `
-      INSERT INTO "Exposure" (id, "shopId", "experimentId", "variantId", "visitorId", "customerId", "firstSeenAt", device, "isBot", "createdAt")
+      INSERT INTO "Exposure" (id, "shopId", "experimentId", "variantId", "visitorId", "customerId", "firstSeenAt", device,
+                              "isNewVisitor", referrer, utm, "isBot", "createdAt")
       SELECT '${p}x' || g, $1, $2,
              CASE WHEN g % 2 = 0 THEN $3 ELSE $4 END,
              '${p}v' || g,
              CASE WHEN g % 5 = 0 THEN '${p}c' || g ELSE NULL END,
              $5::timestamp + ((g / 33)::int % ${DAYS}) * interval '1 day' + ((g % 1440) * interval '1 minute'),
              (ARRAY['mobile','desktop','tablet'])[1 + (g % 3)],
+             -- Visitor type (4.10): ~45 % new, ~45 % returning, ~10 % unknown (a snippet that sent no n).
+             CASE WHEN g % 10 = 0 THEN NULL ELSE (g % 2 = 0) END,
+             -- Channels (4.10): eight distinct referrer hosts plus a share with none, so the classification has real
+             -- groups to fold and the query has to read referrer and utm off the heap.
+             (ARRAY[NULL, 'https://l.instagram.com/p/' || g, 'https://www.google.com/search?q=' || g,
+                    'https://www.facebook.com/', 'https://www.bing.com/', 'https://www.idealo.de/x/' || g,
+                    'https://blog.example.com/' || g, 'https://www.tiktok.com/'])[1 + (g % 8)],
+             (ARRAY[NULL, '{"source":"ig","medium":"paid"}', '{"source":"google","medium":"cpc"}',
+                    '{"source":"klaviyo","medium":"email"}', '{"source":"print","medium":"qr"}'])[1 + (g % 5)]::jsonb,
              g % 50 = 0,
              now()
       FROM generate_series(1, ${EXPOSURES}) g
@@ -137,8 +150,12 @@ async function main() {
   await t("attributions", () =>
     prisma.$executeRawUnsafe(
       `
-      INSERT INTO "OrderAttribution" ("orderId", "experimentId", "variantId", source, "createdAt")
-      SELECT '${p}o' || g, $1, CASE WHEN g % 2 = 0 THEN $2 ELSE $3 END, 'CART_ATTRIBUTE', now()
+      INSERT INTO "OrderAttribution" ("orderId", "experimentId", "variantId", "visitorId", source, "createdAt")
+      SELECT '${p}o' || g, $1, CASE WHEN g % 2 = 0 THEN $2 ELSE $3 END,
+             -- ~80 % of orders carry _ab_v (4.1b) and join straight onto their exposure; the rest take the ADR-0032
+             -- fallback, which is what keeps both paths under load. gg is the exposure the order belongs to.
+             CASE WHEN g % 5 <> 0 THEN '${p}v' || (CASE WHEN g % 3 = 0 THEN 10 * ((g * 3) % ${linkModulus} + 1) + 5 * (g % 2) ELSE g END) ELSE NULL END,
+             'CART_ATTRIBUTE', now()
       FROM generate_series(1, ${ORDERS}) g
       `,
       experiment.id,
@@ -160,7 +177,10 @@ async function main() {
     ),
   );
 
-  await t("ANALYZE", () => prisma.$executeRawUnsafe(`ANALYZE "Exposure", "Order", "OrderAttribution", "Refund"`));
+  // Trap 3 from WP4: the index-only scans need the visibility map, and a fresh bulk load has none. Without the VACUUM
+  // the covering index is SLOWER than a sequential scan (136 ms → 43 ms in WP4), so every number below would be wrong
+  // in the pessimistic direction. VACUUM reclaims nothing here and deletes nothing – it only marks pages visible.
+  await t("VACUUM ANALYZE", () => prisma.$executeRawUnsafe(`VACUUM ANALYZE "Exposure", "Order", "OrderAttribution", "Refund"`));
 
   console.log("\nLive aggregation (the number WP4 cares about):");
   const timings: number[] = [];
@@ -181,6 +201,29 @@ async function main() {
   }
   const sorted = [...timings].sort((x, y) => x - y);
   console.log(`  median ${sorted[2].toFixed(0)} ms · best ${sorted[0].toFixed(0)} ms · worst ${sorted[4].toFixed(0)} ms`);
+
+  // One load test per breakdown dimension (plan WP4.1), same < 500 ms target as the main aggregation.
+  const loaded = await loadExperimentForStats(experiment.id);
+  if (loaded) {
+    for (const withDay of [false, true]) {
+      console.log(`\nbreakdown(${withDay ? "dimension × day" : "dimension"}):`);
+      for (const dimension of ["day", "device", "visitorType", "channel"] as const) {
+        if (dimension === "day" && withDay) continue; // the day dimension is already by day
+        const runs: number[] = [];
+        let rows = 0;
+        for (let run = 1; run <= 5; run++) {
+          const start = performance.now();
+          const result = await breakdown(loaded, dimension, { byDay: withDay });
+          runs.push(performance.now() - start);
+          rows = result.rows.length;
+        }
+        const s = [...runs].sort((x, y) => x - y);
+        const flag = s[2] < 500 ? "ok" : "OVER BUDGET";
+        console.log(`  ${dimension.padEnd(12)} median ${s[2].toFixed(0).padStart(5)} ms · best ${s[0].toFixed(0)} ms · worst ${s[4].toFixed(0)} ms · ${rows} rows · ${flag}`);
+      }
+    }
+  }
+
   console.log(`\nShop ${domain} (id ${shop.id}), experiment ${experiment.id}. Nothing was deleted.`);
 }
 

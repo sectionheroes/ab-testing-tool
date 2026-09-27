@@ -4,12 +4,14 @@
  * ExperimentResult snapshot (ADR-0025), which is why it carries the window, the tainted days, the bot share and the
  * per-device split: those are free at freeze time and unrecoverable afterwards.
  *
- * The hard rule (plan WP4, CLAUDE.md): `significant` is true only when `sampleSizeReached && pValue < alpha`.
- * Never otherwise, in no branch, for no metric.
+ * The hard rule (plan WP4, CLAUDE.md, ADR-0036): `significant` is true only when `stoppingRuleMet && pValue < alpha`.
+ * Never otherwise, in no branch, for no metric. WP4 spelled the gate `sampleSizeReached`; WP4.1 replaced it with the
+ * three-condition stopping rule of ADR-0036 and left the coupling word for word.
  */
 import { twoProportionZTest } from "./proportions";
 import { srmCheck, type SrmResult } from "./srm";
-import { DEVICES, type ArmCounts, type Device, type Metric, type VariantStats } from "./types";
+import { evaluateStoppingRule, FUTILITY_WEEKS, type StoppingRule, type StoppingRuleConfig } from "./stopping-rule";
+import { DEVICE_BUCKETS, UNKNOWN_DEVICE, type ArmCounts, type DeviceBucket, type Metric, type VariantStats } from "./types";
 import { welchTTest, welchTTestFromMoments, type WelchResult } from "./welch";
 
 export const DEFAULT_ALPHA = 0.05;
@@ -51,10 +53,10 @@ export type VariantResult = {
   lift: number | null;
   ci: [number, number] | null;
   pValue: number | null;
-  /** sampleSizeReached && pValue < alphaAdjusted. Never true in any other case. */
+  /** stoppingRule.met && pValue < alphaAdjusted. Never true in any other case. */
   significant: boolean;
   metrics: Record<Metric, MetricResult>;
-  byDevice: Record<Device, DeviceResult>;
+  byDevice: Record<DeviceBucket, DeviceResult>;
   warnings: string[];
 };
 
@@ -78,8 +80,17 @@ export type GuardrailResult = {
 
 export type EvaluateExperiment = {
   primaryMetric: Metric;
-  /** Per variant, from the sample-size calculator. null means: no plan, so never significant. */
-  plannedSampleSize: number | null;
+  /**
+   * The stopping rule of ADR-0036. Every condition that is set has to be met before there is a verdict; all of them
+   * off means never significant, exactly as a missing `plannedSampleSize` did before WP4.1.
+   */
+  stoppingRule: StoppingRuleConfig;
+  /** When the experiment started – the stopping rule counts days and week boundaries from here, never from Monday. */
+  startedAt?: Date | string | null;
+  /** `Shop.timezone`; days are counted there, not in UTC (4.8). Defaults to UTC. */
+  timezone?: string;
+  /** Closes the evaluation window; the stopping rule measures elapsed days against it. Defaults to the window's `to`. */
+  now?: Date;
   alpha?: number;
   /** Evaluation window actually used, for the snapshot. */
   window?: { from: Date | string | null; to: Date | string | null };
@@ -94,13 +105,13 @@ export type EvaluateResult = {
   /** alpha / comparisons when there is more than one variant against control (Bonferroni, 4.8). */
   alphaAdjusted: number;
   comparisons: number;
-  plannedSampleSize: number | null;
-  sampleSizeReached: boolean;
+  /** Per-condition status, the overall `met`, and the projected `evaluableOn` (ADR-0036). */
+  stoppingRule: StoppingRule;
   /** True when at least one variant is significant on the primary metric. */
   significant: boolean;
   /**
    * Key of the significant variant with the best primary metric that also beat control, else null. Never set before
-   * sampleSizeReached, and never set for a variant that lost significantly.
+   * the stopping rule is met, and never set for a variant that lost significantly.
    */
   winner: string | null;
   srm: SrmResult;
@@ -115,6 +126,11 @@ export type EvaluateResult = {
 
 const ratio = (num: number, den: number) => (den > 0 ? num / den : 0);
 const iso = (v: Date | string | null | undefined) => (v == null ? null : v instanceof Date ? v.toISOString() : v);
+const asDate = (v: Date | string | null | undefined): Date | null => {
+  if (v == null) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
 
 const nullMetric = (estimate: number): MetricResult => ({ estimate, lift: null, ci: null, diff: null, diffCi: null, pValue: null, test: null });
 
@@ -194,13 +210,17 @@ export function guardrail(variantStats: VariantStats[]): GuardrailResult | null 
 }
 
 /**
- * Normalises one arm: converting visitors can never exceed visitors (an order deduplicated to a customer that never
+ * Normalises one arm: converting visitors can never exceed visitors (an order deduplicated to an identity that never
  * produced an exposure row, ADR-0032), so it is clamped and the clamp is reported. Same for a per-visitor revenue
  * sample that is longer than the visitor count.
+ *
+ * `clampConverters: false` for the `unknown` device bucket: its visitors are always 0 by construction (an exposure
+ * always carries a device, 4.10) while its converters are exactly the orders we could not tie to one. Clamping there
+ * would zero the bucket and break the one thing it exists for – device rows that sum to the totals (ADR-0033).
  */
-function normalise(arm: ArmCounts, label: string, warnings: string[]): ArmCounts {
+function normalise(arm: ArmCounts, label: string, warnings: string[], clampConverters = true): ArmCounts {
   const out = { ...arm };
-  if (out.converters > out.visitors) {
+  if (clampConverters && out.converters > out.visitors) {
     warnings.push(`${label}: ${out.converters} converting visitors on ${out.visitors} visitors – clamped to ${out.visitors} (ADR-0032)`);
     out.converters = out.visitors;
   }
@@ -224,9 +244,22 @@ export function evaluate(experiment: EvaluateExperiment, variantStats: VariantSt
   // Bonferroni on alpha with more than two variants (4.8). Two variants = one comparison = no adjustment.
   const alphaAdjusted = comparisons > 1 ? alpha / comparisons : alpha;
 
-  const planned = experiment.plannedSampleSize;
-  const sampleSizeReached = planned != null && planned > 0 && arms.every((v) => v.visitors >= planned);
-  if (planned == null) warnings.push("no plannedSampleSize – significance stays false until one is set (ADR-0018)");
+  // The stopping rule needs the converting visitors per arm, so it runs on the normalised (clamped) counts.
+  const stoppingRule = evaluateStoppingRule({
+    ...experiment.stoppingRule,
+    startedAt: experiment.startedAt ?? experiment.window?.from ?? null,
+    now: experiment.now ?? asDate(experiment.window?.to) ?? new Date(),
+    timezone: experiment.timezone ?? "UTC",
+    convertersPerArm: arms.map((v) => v.converters),
+  });
+  if (!stoppingRule.configured) {
+    warnings.push("stopping rule has no condition set – significance stays false until one is (ADR-0036)");
+  }
+  if (stoppingRule.futility) {
+    warnings.push(
+      `futility: at the current pace the experiment becomes evaluable on ${stoppingRule.evaluableOn}, more than ${FUTILITY_WEEKS} weeks after it started – the MDE is too small for this traffic (ADR-0036). Nothing is stopped automatically.`,
+    );
+  }
 
   const srm = srmCheck(
     arms.map((v) => v.visitors),
@@ -238,13 +271,14 @@ export function evaluate(experiment: EvaluateExperiment, variantStats: VariantSt
     const metrics = metricResults(control, arm, arm.isControl, experiment.primaryMetric, alphaAdjusted);
     const primary = metrics[experiment.primaryMetric];
     const pValue = primary.pValue;
-    // The one rule: significance needs the planned sample size AND a p-value below the adjusted alpha.
-    const significant = sampleSizeReached && pValue != null && Number.isFinite(pValue) && pValue < alphaAdjusted;
+    // The one rule: significance needs the stopping rule met AND a p-value below the adjusted alpha.
+    const significant = stoppingRule.met && pValue != null && Number.isFinite(pValue) && pValue < alphaAdjusted;
 
     const byDevice = Object.fromEntries(
-      DEVICES.map((d) => {
-        const armDevice = normalise(arm.byDevice?.[d] ?? emptyArm(), `variant ${arm.key} / ${d}`, armWarnings);
-        const controlDevice = normalise(control.byDevice?.[d] ?? emptyArm(), `control / ${d}`, []);
+      DEVICE_BUCKETS.map((d) => {
+        const clamp = d !== UNKNOWN_DEVICE;
+        const armDevice = normalise(arm.byDevice?.[d] ?? emptyArm(), `variant ${arm.key} / ${d}`, armWarnings, clamp);
+        const controlDevice = normalise(control.byDevice?.[d] ?? emptyArm(), `control / ${d}`, [], clamp);
         const deviceMetrics = metricResults(controlDevice, armDevice, arm.isControl, experiment.primaryMetric, alphaAdjusted);
         return [
           d,
@@ -260,9 +294,9 @@ export function evaluate(experiment: EvaluateExperiment, variantStats: VariantSt
           } satisfies DeviceResult,
         ];
       }),
-    ) as Record<Device, DeviceResult>;
+    ) as Record<DeviceBucket, DeviceResult>;
 
-    const deviceVisitors = DEVICES.reduce((s, d) => s + byDevice[d].visitors, 0);
+    const deviceVisitors = DEVICE_BUCKETS.reduce((s, d) => s + byDevice[d].visitors, 0);
     if (arm.byDevice && deviceVisitors !== arm.visitors) {
       armWarnings.push(`variant ${arm.key}: device split sums to ${deviceVisitors} visitors, total says ${arm.visitors}`);
     }
@@ -312,8 +346,7 @@ export function evaluate(experiment: EvaluateExperiment, variantStats: VariantSt
     alpha,
     alphaAdjusted,
     comparisons,
-    plannedSampleSize: planned,
-    sampleSizeReached,
+    stoppingRule,
     significant: significantVariants.length > 0,
     winner,
     srm,

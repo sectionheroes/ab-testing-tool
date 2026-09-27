@@ -54,7 +54,11 @@ describe("slimOrder", () => {
   it("keeps what attribution and stats need on the normal order", () => {
     const payload = loadFixture("orders-create.cart-attribute.json");
     const raw = slimOrder(stripPii(payload));
-    expect(raw.note_attributes).toEqual([{ name: "_ab", value: "demo-test:b" }]);
+    // Both cart attributes survive the slimming – 4.1 for the variant, 4.1b for the visitor binding.
+    expect(raw.note_attributes).toEqual([
+      { name: "_ab", value: "demo-test:b" },
+      { name: "_ab_v", value: "44f15d3c-6f0a-4b1e-9f7c-2a1b8e0d5c31" },
+    ]);
     expect(raw.customer).toEqual({ id: 10442132062492 });
     expect(raw.financial_status).toBe("paid");
     expect(raw.cancelled_at).toBeNull();
@@ -67,7 +71,10 @@ describe("slimOrder", () => {
   it("keeps the line item property form and drops presentment inside line items", () => {
     const raw = slimOrder(stripPii(loadFixture("orders-create.line-item-property.json")));
     const li = (raw.line_items as Json[])[0];
-    expect(li.properties).toEqual([{ name: "_ab", value: "demo-test:a" }]);
+    expect(li.properties).toEqual([
+      { name: "_ab", value: "demo-test:a" },
+      { name: "_ab_v", value: "44f15d3c-6f0a-4b1e-9f7c-2a1b8e0d5c31" },
+    ]);
     expect(Object.keys(li.price_set as Json)).toEqual(["shop_money"]);
   });
 });

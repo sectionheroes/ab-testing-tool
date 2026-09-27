@@ -13,42 +13,59 @@ const arm = (key: string, isControl: boolean, over: Partial<VariantStats> = {}):
   ...over,
 });
 
-const base = { primaryMetric: "CR" as const, plannedSampleSize: 5_000 };
+const STARTED = new Date("2026-09-01T00:00:00Z");
+/** A rule that is met: one conversion per arm, no duration condition, no week boundary. */
+const met = { minConversionsPerArm: 1, minDurationDays: null, requireFullWeeks: false };
+/** Not met: far more conversions than the arms have. */
+const notMet = { minConversionsPerArm: 100_000, minDurationDays: null, requireFullWeeks: false };
+const base = {
+  primaryMetric: "CR" as const,
+  stoppingRule: met,
+  startedAt: STARTED,
+  timezone: "Europe/Berlin",
+  now: new Date("2026-09-20T12:00:00Z"),
+};
 
-describe("significance – the hard rule (plan WP4, CLAUDE.md)", () => {
-  it("is false below plannedSampleSize even at p < 0.001", () => {
+describe("significance – the hard rule (plan WP4, CLAUDE.md, ADR-0036)", () => {
+  it("is false while the stopping rule is unmet, even at p < 0.001", () => {
     // 200/2000 vs 320/2000 is a crushing difference: p is far below 0.001.
     const variants = [arm("a", true, { visitors: 2_000, converters: 200 }), arm("b", false, { visitors: 2_000, converters: 320 })];
-    const below = evaluate({ ...base, plannedSampleSize: 5_000 }, variants, STATS_VERSION);
+    const below = evaluate({ ...base, stoppingRule: { ...notMet, minConversionsPerArm: 1_000 } }, variants, STATS_VERSION);
     expect(below.variants[1].pValue!).toBeLessThan(0.001);
-    expect(below.sampleSizeReached).toBe(false);
+    expect(below.stoppingRule.met).toBe(false);
     expect(below.variants[1].significant).toBe(false);
     expect(below.significant).toBe(false);
     expect(below.winner).toBeNull();
 
-    // Same data, but now the plan says 2 000 per variant – identical p-value, now significant.
-    const reached = evaluate({ ...base, plannedSampleSize: 2_000 }, variants, STATS_VERSION);
+    // Same data, but now the rule asks for 200 conversions per arm – identical p-value, now significant.
+    const reached = evaluate({ ...base, stoppingRule: { ...met, minConversionsPerArm: 200 } }, variants, STATS_VERSION);
     expect(reached.variants[1].pValue).toBe(below.variants[1].pValue);
-    expect(reached.sampleSizeReached).toBe(true);
+    expect(reached.stoppingRule.met).toBe(true);
     expect(reached.variants[1].significant).toBe(true);
     expect(reached.winner).toBe("b");
   });
 
-  it("is false without a plannedSampleSize, whatever the data says", () => {
+  it("is false with every condition switched off, whatever the data says", () => {
     const r = evaluate(
-      { ...base, plannedSampleSize: null },
+      { ...base, stoppingRule: { minConversionsPerArm: null, minDurationDays: null, requireFullWeeks: false } },
       [arm("a", true, { visitors: 50_000, converters: 1_000 }), arm("b", false, { visitors: 50_000, converters: 2_000 })],
       STATS_VERSION,
     );
     expect(r.variants[1].pValue!).toBeLessThan(1e-20);
-    expect(r.sampleSizeReached).toBe(false);
+    expect(r.stoppingRule.met).toBe(false);
+    expect(r.stoppingRule.configured).toBe(false);
     expect(r.significant).toBe(false);
-    expect(r.warnings.some((w) => w.includes("no plannedSampleSize"))).toBe(true);
+    expect(r.warnings.some((w) => w.includes("stopping rule has no condition set"))).toBe(true);
   });
 
-  it("needs EVERY arm to reach the planned size, not just one", () => {
-    const r = evaluate(base, [arm("a", true, { visitors: 9_000 }), arm("b", false, { visitors: 4_000, converters: 180 })], STATS_VERSION);
-    expect(r.sampleSizeReached).toBe(false);
+  it("needs EVERY arm to reach the conversion target, not just one", () => {
+    const r = evaluate(
+      { ...base, stoppingRule: { ...met, minConversionsPerArm: 300 } },
+      [arm("a", true, { visitors: 9_000, converters: 300 }), arm("b", false, { visitors: 9_000, converters: 180 })],
+      STATS_VERSION,
+    );
+    expect(r.stoppingRule.met).toBe(false);
+    expect(r.stoppingRule.converterFloor).toBe(180);
     expect(r.variants[1].significant).toBe(false);
   });
 });
@@ -97,7 +114,7 @@ describe("verdict scope (4.8)", () => {
 
   it("picks the best significant variant as winner", () => {
     const r = evaluate(
-      { primaryMetric: "CR", plannedSampleSize: 10_000 },
+      { ...base, primaryMetric: "CR", stoppingRule: { ...met, minConversionsPerArm: 300 } },
       [
         arm("a", true, { weight: 1 / 3, converters: 300 }),
         arm("b", false, { weight: 1 / 3, converters: 420 }),
@@ -167,7 +184,7 @@ describe("byDevice", () => {
         byDevice: { mobile: device(600, 24, 25, 1_900), desktop: device(350, 14, 15, 1_100), tablet: device(50, 2, 2, 200) },
       }),
     ];
-    const r = evaluate({ ...base, plannedSampleSize: 1_000 }, variants, STATS_VERSION);
+    const r = evaluate({ ...base, stoppingRule: { ...met, minConversionsPerArm: 1_000 } }, variants, STATS_VERSION);
     for (const v of r.variants) {
       const sum = (pick: (d: { visitors: number; converters: number; orders: number; revenue: number }) => number) =>
         pick(v.byDevice.mobile) + pick(v.byDevice.desktop) + pick(v.byDevice.tablet);
@@ -190,10 +207,40 @@ describe("byDevice", () => {
     expect(r.warnings.some((w) => w.includes("device split sums to"))).toBe(true);
   });
 
-  it("emits all three devices even when nothing was seen on one", () => {
+  it("emits all four buckets even when nothing was seen on one – `unknown` is visible, not implied (4.10)", () => {
     const r = evaluate(base, [arm("a", true), arm("b", false)], STATS_VERSION);
-    expect(Object.keys(r.variants[0].byDevice).sort()).toEqual(["desktop", "mobile", "tablet"]);
+    expect(Object.keys(r.variants[0].byDevice).sort()).toEqual(["desktop", "mobile", "tablet", "unknown"]);
     expect(r.variants[0].byDevice.tablet.visitors).toBe(0);
+    expect(r.variants[0].byDevice.unknown.visitors).toBe(0);
+  });
+
+  it("keeps converters in the `unknown` bucket instead of clamping them to its 0 visitors (ADR-0033)", () => {
+    // 10 000 visitors, all on mobile; 40 orders of which 15 could not be tied to an exposure.
+    const withUnknown = arm("a", true, {
+      visitors: 10_000,
+      converters: 300,
+      orders: 320,
+      revenue: 24_000,
+      byDevice: {
+        mobile: { visitors: 10_000, converters: 285, orders: 300, revenue: 22_000 },
+        desktop: { visitors: 0, converters: 0, orders: 0, revenue: 0 },
+        tablet: { visitors: 0, converters: 0, orders: 0, revenue: 0 },
+        unknown: { visitors: 0, converters: 15, orders: 20, revenue: 2_000 },
+      },
+    });
+    const r = evaluate(base, [withUnknown, arm("b", false)], STATS_VERSION);
+    const d = r.variants[0].byDevice;
+    expect(d.unknown.converters).toBe(15);
+    expect(d.unknown.orders).toBe(20);
+    expect(d.unknown.revenue).toBe(2_000);
+    // The four buckets sum to the totals – the reason the bucket exists at all.
+    const sum = (pick: (x: { converters: number; orders: number; revenue: number; visitors: number }) => number) =>
+      pick(d.mobile) + pick(d.desktop) + pick(d.tablet) + pick(d.unknown);
+    expect(sum((x) => x.visitors)).toBe(10_000);
+    expect(sum((x) => x.converters)).toBe(300);
+    expect(sum((x) => x.orders)).toBe(320);
+    expect(sum((x) => x.revenue)).toBe(24_000);
+    expect(r.warnings.some((w) => w.includes("unknown") && w.includes("clamped"))).toBe(false);
   });
 });
 
@@ -226,7 +273,7 @@ describe("srm and guardrail", () => {
 
   it("a significantly WORSE variant is significant but never the winner", () => {
     const r = evaluate(
-      { ...base, plannedSampleSize: 500 },
+      { ...base, stoppingRule: { ...met, minConversionsPerArm: 20 } },
       [arm("a", true, { visitors: 600, converters: 60 }), arm("b", false, { visitors: 600, converters: 20 })],
       STATS_VERSION,
     );

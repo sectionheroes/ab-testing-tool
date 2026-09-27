@@ -41,14 +41,19 @@ export async function seedExperiment(
     timezone?: string;
     startedAt?: Date;
     endedAt?: Date | null;
-    plannedSampleSize?: number | null;
+    /** Stopping rule (ADR-0036). The default is deliberately the loosest rule that is still *met*, so a test that
+     * does not care about evaluability gets numbers rather than a withheld verdict. */
+    minConversionsPerArm?: number | null;
+    minDurationDays?: number | null;
+    requireFullWeeks?: boolean;
     primaryMetric?: "CR" | "RPV" | "AOV";
     taintedDays?: string[];
+    domain?: string;
   } = {},
 ) {
   const id = uid();
   const shop = await tx.shop.create({
-    data: { domain: `${id}.myshopify.com`, name: "Test shop", status: "ACTIVE", timezone: opts.timezone ?? "Europe/Berlin" },
+    data: { domain: opts.domain ?? `${id}.myshopify.com`, name: "Test shop", status: "ACTIVE", timezone: opts.timezone ?? "Europe/Berlin" },
   });
   const experiment = await tx.experiment.create({
     data: {
@@ -60,7 +65,9 @@ export async function seedExperiment(
       targeting: {},
       trigger: { type: "immediate" },
       primaryMetric: opts.primaryMetric ?? "CR",
-      plannedSampleSize: opts.plannedSampleSize === undefined ? 1 : opts.plannedSampleSize,
+      minConversionsPerArm: opts.minConversionsPerArm === undefined ? 1 : opts.minConversionsPerArm,
+      minDurationDays: opts.minDurationDays === undefined ? null : opts.minDurationDays,
+      requireFullWeeks: opts.requireFullWeeks ?? false,
       startedAt: opts.startedAt ?? new Date("2026-10-01T00:00:00Z"),
       endedAt: opts.endedAt ?? null,
       decision: opts.endedAt ? "NO_DIFFERENCE" : null,
@@ -72,7 +79,7 @@ export async function seedExperiment(
         ],
       },
     },
-    include: { variants: { orderBy: { key: "asc" } }, shop: { select: { id: true, timezone: true } } },
+    include: { variants: { orderBy: { key: "asc" } }, shop: { select: { id: true, domain: true, timezone: true } } },
   });
   return { id, shop, experiment, a: experiment.variants[0], b: experiment.variants[1] };
 }
@@ -80,7 +87,17 @@ export async function seedExperiment(
 export async function addExposure(
   tx: Tx,
   f: SeededExperiment,
-  opts: { variant?: "a" | "b"; visitorId?: string; customerId?: string | null; at: string; device?: string; isBot?: boolean },
+  opts: {
+    variant?: "a" | "b";
+    visitorId?: string;
+    customerId?: string | null;
+    at: string;
+    device?: string;
+    isBot?: boolean;
+    isNewVisitor?: boolean | null;
+    referrer?: string | null;
+    utm?: Record<string, string> | null;
+  },
 ) {
   const visitorId = opts.visitorId ?? `${f.id}-v${uid()}`;
   return tx.exposure.create({
@@ -92,6 +109,9 @@ export async function addExposure(
       customerId: opts.customerId ?? null,
       firstSeenAt: new Date(opts.at),
       device: opts.device ?? "mobile",
+      isNewVisitor: opts.isNewVisitor === undefined ? null : opts.isNewVisitor,
+      referrer: opts.referrer ?? null,
+      utm: opts.utm ?? undefined,
       isBot: opts.isBot ?? false,
     },
   });
@@ -110,6 +130,9 @@ export async function addOrder(
     cancelledAt?: string | null;
     refund?: number;
     attribute?: boolean;
+    /** Contract 4.1b – the `_ab_v` the order carried. undefined = none, which is the ADR-0032 fallback path. */
+    visitorId?: string | null;
+    source?: "CART_ATTRIBUTE" | "LINE_ITEM_PROPERTY" | "CUSTOMER_LOOKUP";
   },
 ) {
   const id = uid();
@@ -139,7 +162,8 @@ export async function addOrder(
         orderId: order.id,
         experimentId: f.experiment.id,
         variantId: (opts.variant ?? "a") === "a" ? f.a.id : f.b.id,
-        source: "CART_ATTRIBUTE",
+        visitorId: opts.visitorId ?? null,
+        source: opts.source ?? "CART_ATTRIBUTE",
       },
     });
   }

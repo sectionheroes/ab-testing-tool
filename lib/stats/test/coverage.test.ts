@@ -9,7 +9,7 @@
  * SE ≈ 0.5 pp for coverage, ≈ 0.9 pp for power) and narrow enough that a wrong formula fails.
  */
 import { describe, expect, it } from "vitest";
-import { sampleSize, twoProportionZTest, welchTTest } from "../index";
+import { normalCdf, normalQuantile, rpvSurcharge, sampleSize, twoProportionZTest, welchTTest, RPV_POWER_AT_PLANNED_N } from "../index";
 import { Rng } from "./random";
 
 const RUNS = 2_000;
@@ -141,5 +141,33 @@ describe("sampleSize delivers the power it promises", () => {
     // below 60 %, something about the model or the formula changed and the README needs rewriting.
     expect(power).toBeGreaterThan(0.6);
     expect(power).toBeLessThan(0.8);
+
+    // WP4.1: the RPV surcharge is DERIVED from this measurement (ADR-0036 retires the earlier guessed 20–25 %), so the
+    // constant it is derived from has to be the number this test produces. 500 runs give SE ≈ 2 pp; anything inside
+    // ±2 SE of the recorded 71.6 % is the same measurement, anything outside means the surcharge is now wrong.
+    expect(Math.abs(power - RPV_POWER_AT_PLANNED_N)).toBeLessThan(0.04);
   }, 120_000);
+
+  it("derives the RPV surcharge from that measured power instead of estimating it (ADR-0036)", () => {
+    // power = Φ(√(n/2)·Δ/σ − z_{1−α/2}) ⇒ n scales with ((z + z_target)/(z + z_measured))².
+    expect(RPV_POWER_AT_PLANNED_N).toBe(0.716);
+    expect(rpvSurcharge()).toBeCloseTo(1.2253, 4);
+
+    // Sanity on the derivation itself: applying the surcharge to n lifts the implied power from 71.6 % to 80 %.
+    const zAlpha = normalQuantile(0.975);
+    const noncentralityAtPlannedN = zAlpha + normalQuantile(RPV_POWER_AT_PLANNED_N);
+    const lifted = noncentralityAtPlannedN * Math.sqrt(rpvSurcharge());
+    expect(normalCdf(lifted - zAlpha)).toBeCloseTo(0.8, 6);
+
+    // It reaches the planner's own output, so a caller cannot forget to apply it.
+    const plan = sampleSize({ metric: "RPV", mean: 2.55, sd: 16.4, mde: 0.1 });
+    expect(plan.surcharge).toBeCloseTo(1.2253, 4);
+    expect(plan.perVariantConservative).toBe(Math.ceil(plan.perVariant * plan.surcharge));
+    expect(plan.perVariantConservative).toBeGreaterThan(plan.perVariant);
+
+    // CR is untouched – the formula holds there, as the power test above measures.
+    const cr = sampleSize({ metric: "CR", baselineCR: 0.03, mde: 0.125 });
+    expect(cr.surcharge).toBe(1);
+    expect(cr.perVariantConservative).toBe(cr.perVariant);
+  });
 });

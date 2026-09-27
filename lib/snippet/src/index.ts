@@ -9,7 +9,7 @@ import { device, isBot, ls, onReady, ss, storageOk, utm } from "./env";
 import { resolveForce, type Force } from "./force";
 import { matches } from "./targeting";
 import type { Config, Experiment, Shab, Variant } from "./types";
-import { getVisitorId } from "./visitor";
+import { getVisitorId, type VisitorId } from "./visitor";
 
 type Active = { exp: Experiment; variant: Variant; forced: boolean; failed?: unknown };
 
@@ -69,7 +69,8 @@ function consentGate(fn: () => void): void {
 }
 
 function run(cfg: Config, shab: Shab, force: Force): void {
-  const vid = getVisitorId();
+  const visitor = getVisitorId();
+  const vid = visitor.id;
   const ctx = { pathname: location.pathname, search: location.search, device: device() };
   const experiments = cfg.experiments.filter((e) => e && e.status === "running").sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
@@ -122,12 +123,12 @@ function run(cfg: Config, shab: Shab, force: Force): void {
       }
       if (a.forced) continue;
       pairs.push({ e: a.exp.key, v: a.variant.key });
-      scheduleExposure(a, vid, shab.customerId, ctx.device);
+      scheduleExposure(a, visitor, shab.customerId, ctx.device);
     }
 
     const value = buildAbValue(pairs);
-    syncCartAttribute(value);
-    injectHiddenInputs(value);
+    syncCartAttribute(value, vid);
+    injectHiddenInputs(value, vid);
     linkCustomer(vid, shab.customerId);
   });
 }
@@ -142,7 +143,7 @@ function removeCss(key: string): void {
 }
 
 /** 4.5: once per experiment per visitor, after apply; `visible` trigger waits for the selector in the viewport. */
-function scheduleExposure(a: Active, vid: string, cid: number | null, dev: ExposurePayload["dev"]): void {
+function scheduleExposure(a: Active, visitor: VisitorId, cid: number | null, dev: ExposurePayload["dev"]): void {
   const key = EXP_MARKER + a.exp.key;
   if (ls.get(key)) return;
   const send = () => {
@@ -150,10 +151,11 @@ function scheduleExposure(a: Active, vid: string, cid: number | null, dev: Expos
       v: 1,
       e: a.exp.key,
       var: a.variant.key,
-      vid,
+      vid: visitor.id,
       cid,
       url: location.pathname + location.search,
       dev,
+      n: visitor.isNew,
       ref: document.referrer || "",
       utm: utm(),
       t: Math.floor(Date.now() / 1000),

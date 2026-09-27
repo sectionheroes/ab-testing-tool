@@ -23,11 +23,17 @@ export type ExposureBody = {
   cid: string | null;
   url: string;
   dev: string;
+  /**
+   * Contract 4.5 field `n` as amended by ADR-0035 – optional. A snippet that does not send it leaves
+   * `Exposure.isNewVisitor` null, and the report shows those exposures as the `unknown` visitor type (4.10). Anything
+   * that is not a boolean is treated as absent rather than as a reason to drop the exposure.
+   */
+  isNewVisitor: boolean | null;
   ref: string | null;
   utm: Record<string, string> | null;
 };
 
-/** `{ v:1, e, var, vid, cid, url, dev, ref, utm, t }` per 4.5 – returns null for anything that does not fit. */
+/** `{ v:1, e, var, vid, cid, url, dev, n, ref, utm, t }` per 4.5 – returns null for anything that does not fit. */
 export function parseExposureBody(body: unknown): ExposureBody | null {
   if (!isObject(body) || body.v !== 1) return null;
   const e = slug(body.e);
@@ -48,7 +54,8 @@ export function parseExposureBody(body: unknown): ExposureBody | null {
     }
   }
   const cid = body.cid === null || body.cid === undefined ? null : String(body.cid);
-  return { e, variant, vid, cid, url, dev, ref: ref || null, utm };
+  const isNewVisitor = typeof body.n === "boolean" ? body.n : null;
+  return { e, variant, vid, cid, url, dev, isNewVisitor, ref: ref || null, utm };
 }
 
 // One log line per unknown (shop, experiment, variant) – the snippet resends on every load while it holds a stale config.
@@ -95,6 +102,7 @@ export async function recordExposure(ctx: ProxyContext, body: unknown): Promise<
         customerId: ctx.customerId,
         firstSeenAt: new Date(),
         device: p.dev,
+        isNewVisitor: p.isNewVisitor,
         country: null,
         referrer: p.ref,
         utm: p.utm === null ? undefined : (p.utm as Prisma.InputJsonObject),

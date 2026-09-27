@@ -75,9 +75,32 @@ export function setCookie(name: string, value: string, days: number): void {
   }
 }
 
-export function device(ua: string = navigator.userAgent): Device {
+/** `navigator.maxTouchPoints`, 0 when the browser does not report it. Never throws. */
+export function touchPoints(nav: Navigator = navigator): number {
+  try {
+    const n = nav.maxTouchPoints;
+    return typeof n === "number" && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Device class of an exposure (contract 4.2 / 4.10). UA heuristic, and therefore fallible – it is the class at
+ * exposure time, which is what the report shows.
+ *
+ * The `Macintosh` + touch rule is the iPadOS fix (WP4.1): since iPadOS 13 an iPad requests desktop sites by default
+ * and sends a UA that is byte-for-byte a Mac Safari UA. Nothing in the string distinguishes it; the only signal left
+ * is that a Mac reports `maxTouchPoints === 0` and an iPad reports 5. Without this every iPad landed in `desktop`,
+ * which is a third of mobile commerce traffic in the wrong bucket.
+ *
+ * It is deliberately scoped to `Macintosh`: a Windows touch laptop also reports touch points and is genuinely a
+ * desktop, so the rule must not generalise to "touch means tablet".
+ */
+export function device(ua: string = navigator.userAgent, maxTouchPoints: number = touchPoints()): Device {
   if (/iPad|Tablet|Android(?!.*Mobile)/i.test(ua)) return "tablet";
   if (/Mobi|iPhone|Android/i.test(ua)) return "mobile";
+  if (/Macintosh/.test(ua) && maxTouchPoints > 1) return "tablet";
   return "desktop";
 }
 

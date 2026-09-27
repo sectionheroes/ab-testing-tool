@@ -12,7 +12,7 @@ const NOW = new Date("2026-10-20T00:00:00Z");
 describe("freezeExperimentResult", () => {
   it("freezes the numbers, the context and the verdict", async () => {
     const { frozen, row } = await inRollback(async (tx) => {
-      const f = await seedExperiment(tx, { endedAt: new Date("2026-10-10T00:00:00Z"), plannedSampleSize: 1 });
+      const f = await seedExperiment(tx, { endedAt: new Date("2026-10-10T00:00:00Z") });
       await tx.variant.update({ where: { id: f.b.id }, data: { js: "document.title = 'b'", css: ".x{color:red}" } });
       await tx.experiment.update({
         where: { id: f.experiment.id },
@@ -43,6 +43,9 @@ describe("freezeExperimentResult", () => {
     expect(snapshot.frozen.variants.find((v) => v.key === "b")?.js).toBe("document.title = 'b'");
     expect(snapshot.frozen.variants.find((v) => v.key === "b")?.css).toBe(".x{color:red}");
     expect(snapshot.frozen.salt).toBe("salt");
+    // The stopping rule is part of the frozen context (ADR-0036): it may be tightened while RUNNING, so the current
+    // experiment row is not evidence of what the verdict was read against.
+    expect(snapshot.frozen.stoppingRule).toEqual({ minConversionsPerArm: 1, minDurationDays: null, requireFullWeeks: false });
     expect(snapshot.frozen.allocation).toBe(1);
     expect(snapshot.frozen.trigger).toEqual({ type: "immediate" });
     expect(snapshot.verdict).toEqual({ decision: "NO_DIFFERENCE", conclusion: "No measurable difference." });
@@ -50,7 +53,7 @@ describe("freezeExperimentResult", () => {
 
   it("a second call does not overwrite the snapshot, even when the data changed underneath", async () => {
     const { first, second, rows } = await inRollback(async (tx) => {
-      const f = await seedExperiment(tx, { endedAt: new Date("2026-10-10T00:00:00Z"), plannedSampleSize: 1 });
+      const f = await seedExperiment(tx, { endedAt: new Date("2026-10-10T00:00:00Z") });
       await addExposure(tx, f, { at: "2026-10-02T09:00:00Z", customerId: "c1" });
       const first = await freezeExperimentResult(f.experiment.id, { now: NOW, db: tx });
 

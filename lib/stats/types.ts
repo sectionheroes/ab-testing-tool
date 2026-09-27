@@ -2,8 +2,19 @@
 import type { Moments, Samples } from "./welch";
 
 export type Metric = "CR" | "RPV" | "AOV";
+
+/** What the snippet classifies an exposure as (`Exposure.device`) – contract 4.2. */
 export type Device = "mobile" | "desktop" | "tablet";
 export const DEVICES: Device[] = ["mobile", "desktop", "tablet"];
+
+/**
+ * The device buckets of a report (contract 4.10). `unknown` is the fourth, **visible** bucket: an order that could not
+ * be tied to an exposure has no device (no `_ab_v`, ADR-0033), and without this bucket the device rows would not sum
+ * to the totals. Visitors are never `unknown` – every exposure carries a device.
+ */
+export type DeviceBucket = Device | "unknown";
+export const UNKNOWN_DEVICE = "unknown" as const;
+export const DEVICE_BUCKETS: DeviceBucket[] = ["mobile", "desktop", "tablet", UNKNOWN_DEVICE];
 
 /** The raw counts of one arm (whole experiment or one device slice), exactly as contract 4.8 defines them. */
 export type ArmCounts = {
@@ -34,5 +45,5 @@ export type VariantStats = ArmCounts & {
   weight: number;
   /** Bot exposures, for botShare in the snapshot. Not part of any count. */
   botVisitors?: number;
-  byDevice?: Partial<Record<Device, ArmCounts>>;
+  byDevice?: Partial<Record<DeviceBucket, ArmCounts>>;
 };

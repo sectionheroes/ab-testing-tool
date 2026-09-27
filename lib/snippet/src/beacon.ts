@@ -27,6 +27,8 @@ export type ExposurePayload = {
   cid: number | null;
   url: string;
   dev: Device;
+  /** Contract 4.5 as amended by ADR-0035: no valid `_shab_vid` was present at page load. */
+  n: boolean;
   ref: string;
   utm: Record<string, string> | null;
   t: number;

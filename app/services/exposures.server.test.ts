@@ -57,6 +57,23 @@ describe("parseExposureBody", () => {
     expect(parseExposureBody("nope")).toBeNull();
     expect(parseExposureBody(null)).toBeNull();
   });
+
+  // Contract 4.5 field `n` (ADR-0035). Optional: a snippet that does not send it must still be accepted.
+  it("reads `n` into isNewVisitor and treats anything non-boolean as absent", () => {
+    expect(parseExposureBody(body({ n: true }))?.isNewVisitor).toBe(true);
+    expect(parseExposureBody(body({ n: false }))?.isNewVisitor).toBe(false);
+    for (const n of [undefined, null, "true", 1, 0, {}, []]) {
+      const parsed = parseExposureBody(body({ n }));
+      expect(parsed).not.toBeNull();
+      expect(parsed?.isNewVisitor).toBeNull();
+    }
+  });
+
+  it("never rejects an exposure over `n` – a missing flag costs a segment, not the visitor", () => {
+    const withoutN = { ...body() };
+    delete (withoutN as Record<string, unknown>).n;
+    expect(parseExposureBody(withoutN)).not.toBeNull();
+  });
 });
 
 describe("recordExposure", () => {
@@ -67,10 +84,22 @@ describe("recordExposure", () => {
     expect(prisma.exposure.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         skipDuplicates: true,
-        data: [expect.objectContaining({ shopId: "shop1", experimentId: "exp1", variantId: "vb", visitorId: body().vid, customerId: null, device: "mobile", country: null, isBot: false })],
+        data: [expect.objectContaining({ shopId: "shop1", experimentId: "exp1", variantId: "vb", visitorId: body().vid, customerId: null, device: "mobile", isNewVisitor: null, country: null, isBot: false })],
       }),
     );
     expect(await recordExposure(ctx(), body())).toBe("duplicate");
+  });
+
+  it("persists `n` as isNewVisitor (ADR-0035)", async () => {
+    prisma.experiment.findUnique.mockResolvedValue(running);
+    prisma.exposure.createMany.mockResolvedValue({ count: 1 });
+    for (const [n, expected] of [[true, true], [false, false]] as const) {
+      prisma.exposure.createMany.mockClear();
+      await recordExposure(ctx(), body({ n }));
+      expect(prisma.exposure.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: [expect.objectContaining({ isNewVisitor: expected })] }),
+      );
+    }
   });
 
   it("non-RUNNING experiment, unknown experiment or variant → ignored, nothing written, logged once", async () => {

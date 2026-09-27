@@ -13,9 +13,14 @@ const syncShopConfig = vi.fn();
 vi.mock("./metafields.server", () => ({ syncShopConfig }));
 const freezeExperimentResult = vi.fn();
 vi.mock("./experiment-result.server", () => ({ freezeExperimentResult }));
-const { setExperimentStatus, saveVariantCode, ExperimentError } = await import("./experiments.server");
+const { setExperimentStatus, saveVariantCode, setStoppingRule, ExperimentError } = await import("./experiments.server");
 
-const base = { id: "e1", shopId: "shop1", key: "demo-test", status: "DRAFT", startedAt: null, endedAt: null, decision: null, conclusion: null };
+const RULE: { minConversionsPerArm: number | null; minDurationDays: number | null; requireFullWeeks: boolean } = {
+  minConversionsPerArm: 1_000,
+  minDurationDays: 14,
+  requireFullWeeks: true,
+};
+const base = { id: "e1", shopId: "shop1", key: "demo-test", status: "DRAFT", startedAt: null, endedAt: null, decision: null, conclusion: null, ...RULE };
 const ok = { skipped: false, bytes: 1, experiments: 1, updatedAt: "t", config: {} };
 
 beforeEach(() => {
@@ -94,5 +99,91 @@ describe("saveVariantCode", () => {
     syncShopConfig.mockRejectedValue(new Error("too big"));
     await expect(saveVariantCode("v1", { js: "huge" }, "joel")).rejects.toThrow("too big");
     expect(db.variant.update.mock.calls[1][0].data).toEqual({ js: "old", css: null });
+  });
+});
+
+/**
+ * Contract 4.6 as amended by ADR-0036. The asymmetry is the whole point: without it, lowering the threshold below the
+ * current stand hands out a p-value on demand, and the fixed horizon of ADR-0018 means nothing.
+ */
+describe("setStoppingRule", () => {
+  const at = (status: string, over: Partial<typeof RULE> = {}) => db.experiment.findUnique.mockResolvedValue({ ...base, status, ...RULE, ...over });
+
+  it("tightening a RUNNING experiment is allowed and logged as STOPPING_RULE_CHANGED", async () => {
+    at("RUNNING");
+    const r = await setStoppingRule("e1", { minConversionsPerArm: 2_000 }, "joel@example.com");
+    expect(r.changed).toBe(true);
+    expect(db.experiment.update).toHaveBeenCalledWith({
+      where: { id: "e1" },
+      data: { minConversionsPerArm: 2_000, minDurationDays: 14, requireFullWeeks: true },
+    });
+    expect(db.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: "STOPPING_RULE_CHANGED", actor: "joel@example.com" }) }),
+    );
+  });
+
+  it("more days is tightening; switching full weeks ON is tightening", async () => {
+    at("RUNNING", { requireFullWeeks: false });
+    await expect(setStoppingRule("e1", { minDurationDays: 21, requireFullWeeks: true }, "joel")).resolves.toMatchObject({ changed: true });
+  });
+
+  it("refuses to lower the conversion target while RUNNING", async () => {
+    at("RUNNING");
+    await expect(setStoppingRule("e1", { minConversionsPerArm: 500 }, "joel")).rejects.toThrow(/only be tightened/);
+    expect(db.experiment.update).not.toHaveBeenCalled();
+    expect(db.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses to shorten the duration, to switch full weeks off, or to switch a condition off entirely", async () => {
+    const loosenings: Partial<typeof RULE>[] = [
+      { minDurationDays: 7 },
+      { requireFullWeeks: false },
+      { minConversionsPerArm: null },
+      { minDurationDays: null },
+    ];
+    for (const loosening of loosenings) {
+      at("RUNNING");
+      await expect(setStoppingRule("e1", loosening, "joel")).rejects.toThrow(/only be tightened/);
+    }
+  });
+
+  it("names every field that was loosened, not just the first", async () => {
+    at("RUNNING");
+    await expect(setStoppingRule("e1", { minConversionsPerArm: 100, minDurationDays: 3 }, "joel")).rejects.toThrow(
+      /minConversionsPerArm, minDurationDays/,
+    );
+  });
+
+  it("allows loosening in DRAFT and in PAUSED", async () => {
+    for (const status of ["DRAFT", "PAUSED"]) {
+      db.experiment.update.mockClear();
+      at(status);
+      await expect(setStoppingRule("e1", { minConversionsPerArm: 100, requireFullWeeks: false }, "joel")).resolves.toMatchObject({ changed: true });
+      expect(db.experiment.update).toHaveBeenCalled();
+    }
+  });
+
+  it("switching a condition ON from null is tightening, even while RUNNING", async () => {
+    at("RUNNING", { minConversionsPerArm: null });
+    await expect(setStoppingRule("e1", { minConversionsPerArm: 1_000 }, "joel")).resolves.toMatchObject({ changed: true });
+  });
+
+  it("a no-op writes nothing and logs nothing", async () => {
+    at("RUNNING");
+    const r = await setStoppingRule("e1", { minConversionsPerArm: 1_000, minDurationDays: 14, requireFullWeeks: true }, "joel");
+    expect(r.changed).toBe(false);
+    expect(db.experiment.update).not.toHaveBeenCalled();
+    expect(db.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("an ENDED experiment is frozen – the rule its verdict was read at cannot move afterwards", async () => {
+    at("ENDED");
+    await expect(setStoppingRule("e1", { minConversionsPerArm: 2_000 }, "joel")).rejects.toThrow(/frozen/);
+  });
+
+  it("does not touch the storefront config – the snippet never sees the stopping rule", async () => {
+    at("DRAFT");
+    await setStoppingRule("e1", { minDurationDays: 28 }, "joel");
+    expect(syncShopConfig).not.toHaveBeenCalled();
   });
 });
