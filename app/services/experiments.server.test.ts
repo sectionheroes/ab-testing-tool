@@ -4,17 +4,23 @@ const db = {
   experiment: { findUnique: vi.fn(), update: vi.fn() },
   variant: { findUnique: vi.fn(), update: vi.fn() },
   auditLog: { create: vi.fn() },
+  experimentResult: { delete: vi.fn() },
+  // The ENDED path wraps the update and the snapshot in one transaction (ADR-0025); the mock just runs the callback.
+  $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(db)),
 };
 vi.mock("../db.server", () => ({ default: db }));
 const syncShopConfig = vi.fn();
 vi.mock("./metafields.server", () => ({ syncShopConfig }));
+const freezeExperimentResult = vi.fn();
+vi.mock("./experiment-result.server", () => ({ freezeExperimentResult }));
 const { setExperimentStatus, saveVariantCode, ExperimentError } = await import("./experiments.server");
 
 const base = { id: "e1", shopId: "shop1", key: "demo-test", status: "DRAFT", startedAt: null, endedAt: null, decision: null, conclusion: null };
 const ok = { skipped: false, bytes: 1, experiments: 1, updatedAt: "t", config: {} };
 
 beforeEach(() => {
-  for (const m of [db.experiment.findUnique, db.experiment.update, db.variant.findUnique, db.variant.update, db.auditLog.create, syncShopConfig]) m.mockReset();
+  for (const m of [db.experiment.findUnique, db.experiment.update, db.variant.findUnique, db.variant.update, db.auditLog.create, db.experimentResult.delete, syncShopConfig, freezeExperimentResult]) m.mockReset();
+  freezeExperimentResult.mockResolvedValue({ id: "res1", created: true, statsVersion: "1.0.0", snapshot: {} });
   db.experiment.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...base, ...data }));
   db.variant.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "v1", key: "b", ...data }));
   syncShopConfig.mockResolvedValue(ok);

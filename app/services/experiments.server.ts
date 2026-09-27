@@ -3,6 +3,7 @@
 import type { Decision, Experiment, ExperimentStatus, Prisma, Variant } from "@prisma/client";
 import prisma from "../db.server";
 import { logAudit } from "./audit.server";
+import { freezeExperimentResult } from "./experiment-result.server";
 import { syncShopConfig, type SyncResult } from "./metafields.server";
 
 export class ExperimentError extends Error {
@@ -29,7 +30,10 @@ export function getExperiment(shopId: string, key: string) {
  * Status change. startedAt is set on the first transition to RUNNING and never moved (attribution window 4.8 starts
  * there); endedAt is set on ENDED and closes the window. ENDED needs a decision (plan §3). The DB change is rolled back
  * if the metafield write fails, so the DB never says RUNNING while the storefront does not know.
- * The ExperimentResult snapshot on ENDED is WP4 (stats engine) – not written here.
+ *
+ * On ENDED the frozen ExperimentResult snapshot is written in the SAME transaction as the status change (ADR-0025),
+ * with the evaluation window closing at the endedAt we just set. freezeExperimentResult never overwrites an existing
+ * snapshot, so a retried transition cannot change a result that was already reported.
  */
 export async function setExperimentStatus(
   experimentId: string,
@@ -52,7 +56,17 @@ export async function setExperimentStatus(
     data.decision = opts.decision;
     if (opts.conclusion !== undefined) data.conclusion = opts.conclusion;
   }
-  const experiment = await prisma.experiment.update({ where: { id: experimentId }, data });
+  const { experiment, frozenResultId } = await prisma.$transaction(
+    async (tx) => {
+      const updated = await tx.experiment.update({ where: { id: experimentId }, data });
+      if (status !== "ENDED") return { experiment: updated, frozenResultId: null as string | null };
+      const frozen = await freezeExperimentResult(experimentId, { now, db: tx });
+      return { experiment: updated, frozenResultId: frozen.created ? frozen.id : null };
+    },
+    // The snapshot runs the full live aggregation, which is allowed up to 500 ms at a million exposures (ADR-0019);
+    // the default 5 s interactive-transaction budget is too tight for the slowest shop plus its round trips.
+    { timeout: 30_000, maxWait: 10_000 },
+  );
 
   let sync: SyncResult;
   try {
@@ -62,6 +76,8 @@ export async function setExperimentStatus(
       where: { id: experimentId },
       data: { status: current.status, startedAt: current.startedAt, endedAt: current.endedAt, decision: current.decision, conclusion: current.conclusion },
     });
+    // Undo only a snapshot this very call created – an older one is never touched (ADR-0025).
+    if (frozenResultId) await prisma.experimentResult.delete({ where: { id: frozenResultId } });
     throw err;
   }
   await logAudit({
