@@ -124,6 +124,7 @@ export async function rawStatsRows(
           " ",
         );
   const exposureDayFilter = notOnTaintedDay(Prisma.sql`e."firstSeenAt"`);
+  const exposureDayFilterKv = notOnTaintedDay(Prisma.sql`kv."firstSeenAt"`);
   const orderDayFilter = notOnTaintedDay(Prisma.sql`o."createdAt"`);
 
   return db.$queryRaw<StatsRow[]>`
@@ -170,19 +171,17 @@ export async function rawStatsRows(
                AND EXISTS (SELECT 1 FROM "Exposure" d WHERE d."experimentId" = ${experiment.id} AND d."customerId" = co.customer_id)
              ) AS customer_dropped
       FROM counting_orders co
-      LEFT JOIN LATERAL (
-        -- Straight at the table, not at a CTE: this is what lets the indexes do the work. Through a materialised CTE
-        -- the same join scans a million rows per order and takes minutes instead of milliseconds.
-        SELECT e."visitorId", e.device
-        FROM "Exposure" e
-        WHERE e."experimentId" = ${experiment.id}
-          AND e."visitorId" = co.visitor_id
-          AND e."isBot" = false
-          AND e."variantId" = co.variant_id
-          AND e."firstSeenAt" <= co.created_at
-          ${exposureDayFilter}
-        LIMIT 1
-      ) kv ON true
+      -- Straight at the table, never at a materialised CTE: that is what lets the indexes do the work (through a CTE
+      -- the same join scans a million rows per order and takes minutes). And a plain LEFT JOIN, not a LATERAL: the
+      -- (experimentId, visitorId) index is UNIQUE, so at most one row matches and the LIMIT 1 a lateral needs was
+      -- redundant – it only pinned the planner to a nested loop. Letting it choose costs 100 ms instead of 250 ms.
+      LEFT JOIN "Exposure" kv
+        ON kv."experimentId" = ${experiment.id}
+       AND kv."visitorId" = co.visitor_id
+       AND kv."isBot" = false
+       AND kv."variantId" = co.variant_id
+       AND kv."firstSeenAt" <= co.created_at
+       ${exposureDayFilterKv}
       LEFT JOIN LATERAL (
         SELECT e.device
         FROM "Exposure" e
@@ -682,23 +681,40 @@ export async function breakdown(
           " ",
         );
   const exposureDayFilter = notOnTaintedDay(Prisma.sql`e."firstSeenAt"`);
+  const exposureDayFilterKv = notOnTaintedDay(Prisma.sql`kv."firstSeenAt"`);
   const orderDayFilter = notOnTaintedDay(Prisma.sql`o."createdAt"`);
 
   const segment = segmentExpr(dimension);
   const needsReferrer = dimension === "channel";
-  // The exposure source: the day intervals joined onto "Exposure", so the day is a constant per scan rather than a
-  // computed sort key, and the tainted days are excluded by not being in the list at all (see dayIntervals). Without
-  // the day dimension a single interval spanning the whole axis does the same job in one range scan.
-  const exposureFrom =
-    byDay && days.length > 0
-      ? Prisma.sql`${dayIntervals(days, tz)} JOIN "Exposure" e ON e."experimentId" = ${experiment.id} AND e."isBot" = false
+  /**
+   * How the day is produced, and it depends on whether the scan can stay inside an index.
+   *
+   * `day`, `device` and `visitorType` are covered by `Exposure_experimentId_isBot_firstSeenAt_variantId_device_is_idx`,
+   * so the scan never visits the heap. There the day has to be a **join against a small list of UTC intervals**: a
+   * computed `::date` key cannot be read in index order, so Postgres would sort a million rows to group them and spill
+   * several MB per worker to disk (trap 2 of plan WP4.1, measured).
+   *
+   * `channel` needs `referrer` and `utm`, which are not in any index, so it reads the heap whatever we do. There the
+   * interval join is the wrong tool: 30 range scans mean 30 × random heap access instead of one sequential pass, and
+   * measured at 150 k exposures it costs 1 404 ms against 147 ms for the same shape on an index-only dimension. A
+   * sequential scan with the date computed per row and a hash aggregate is the right plan – the sort the interval join
+   * exists to avoid is not the bottleneck when the scan is already going to the heap.
+   *
+   * Either way every *filter* bound is still a UTC instant through `utcTimestamp()`; that rule never bends.
+   */
+  const useDayIntervals = byDay && days.length > 0 && !needsReferrer;
+  const exposureFrom = useDayIntervals
+    ? Prisma.sql`${dayIntervals(days, tz)} JOIN "Exposure" e ON e."experimentId" = ${experiment.id} AND e."isBot" = false
         AND e."firstSeenAt" >= d.lo AND e."firstSeenAt" < d.hi`
-      : Prisma.sql`"Exposure" e`;
-  const exposureWhere =
-    byDay && days.length > 0
-      ? Prisma.empty
-      : Prisma.sql`WHERE e."experimentId" = ${experiment.id} AND e."isBot" = false ${exposureDayFilter}`;
-  const exposureDay = byDay ? Prisma.sql`d.day` : Prisma.sql`NULL::date`;
+    : Prisma.sql`"Exposure" e`;
+  const exposureWhere = useDayIntervals
+    ? Prisma.empty
+    : Prisma.sql`WHERE e."experimentId" = ${experiment.id} AND e."isBot" = false ${exposureDayFilter}`;
+  const exposureDay = useDayIntervals
+    ? Prisma.sql`d.day`
+    : byDay
+      ? dayExpr(Prisma.sql`e."firstSeenAt"`, tz)
+      : Prisma.sql`NULL::date`;
   // For the order side the day still comes from the visitor's exposure, not from the order (4.9, cohort dating).
   const linkedDay = byDay ? dayExpr(Prisma.sql`k."firstSeenAt"`, tz) : Prisma.sql`NULL::date`;
   const linkedSegment =
@@ -750,18 +766,15 @@ export async function breakdown(
              ) AS customer_dropped
       FROM counting_orders co
       -- Trap 1: both lookups go straight at "Exposure" so the (experimentId, visitorId) unique index and
-      -- Exposure_customerId_idx are used. A materialised CTE here turns each into a full scan.
-      LEFT JOIN LATERAL (
-        SELECT e.id, e."visitorId", e.device, e."isNewVisitor", e."firstSeenAt", e.referrer, e.utm
-        FROM "Exposure" e
-        WHERE e."experimentId" = ${experiment.id}
-          AND e."visitorId" = co.visitor_id
-          AND e."isBot" = false
-          AND e."variantId" = co.variant_id
-          AND e."firstSeenAt" <= co.created_at
-          ${exposureDayFilter}
-        LIMIT 1
-      ) kv ON true
+      -- Exposure_customerId_idx are used. A materialised CTE here turns each into a full scan. The first one is a
+      -- plain LEFT JOIN rather than a LATERAL because that index is UNIQUE – see rawStatsRows for the measurement.
+      LEFT JOIN "Exposure" kv
+        ON kv."experimentId" = ${experiment.id}
+       AND kv."visitorId" = co.visitor_id
+       AND kv."isBot" = false
+       AND kv."variantId" = co.variant_id
+       AND kv."firstSeenAt" <= co.created_at
+       ${exposureDayFilterKv}
       LEFT JOIN LATERAL (
         SELECT e.id, e.device, e."isNewVisitor", e."firstSeenAt", e.referrer, e.utm
         FROM "Exposure" e

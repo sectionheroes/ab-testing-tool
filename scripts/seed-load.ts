@@ -95,13 +95,18 @@ async function main() {
              (ARRAY['mobile','desktop','tablet'])[1 + (g % 3)],
              -- Visitor type (4.10): ~45 % new, ~45 % returning, ~10 % unknown (a snippet that sent no n).
              CASE WHEN g % 10 = 0 THEN NULL ELSE (g % 2 = 0) END,
-             -- Channels (4.10): eight distinct referrer hosts plus a share with none, so the classification has real
-             -- groups to fold and the query has to read referrer and utm off the heap.
-             (ARRAY[NULL, 'https://l.instagram.com/p/' || g, 'https://www.google.com/search?q=' || g,
-                    'https://www.facebook.com/', 'https://www.bing.com/', 'https://www.idealo.de/x/' || g,
-                    'https://blog.example.com/' || g, 'https://www.tiktok.com/'])[1 + (g % 8)],
-             (ARRAY[NULL, '{"source":"ig","medium":"paid"}', '{"source":"google","medium":"cpc"}',
-                    '{"source":"klaviyo","medium":"email"}', '{"source":"print","medium":"qr"}'])[1 + (g % 5)]::jsonb,
+             -- Channels (4.10). The shape matters as much as the values: a real document.referrer collapses onto a
+             -- handful of hosts, because search engines and social apps strip the path, and only a referral from an
+             -- article carries one. 30 % arrive with no referrer at all and 30 % with a UTM. An earlier version of this
+             -- fixture gave every row a unique referrer path, which doubled the table width and turned a million rows
+             -- into a million distinct group keys – adversarial, not realistic, and it made the channel query look
+             -- twice as slow as it is. Referrer and UTM are drawn on coprime moduli so they cross-combine.
+             (ARRAY[NULL, NULL, NULL, 'https://l.instagram.com/', 'https://www.google.com/',
+                    'https://www.facebook.com/', 'https://www.bing.com/', 'https://www.idealo.de/',
+                    'https://blog.example.com/posts/' || (g % 50), 'https://www.tiktok.com/'])[1 + (g % 10)],
+             (ARRAY[NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                    '{"source":"ig","medium":"paid"}', '{"source":"klaviyo","medium":"email"}',
+                    '{"source":"print","medium":"qr"}'])[1 + ((g * 3) % 10)]::jsonb,
              g % 50 = 0,
              now()
       FROM generate_series(1, ${EXPOSURES}) g
@@ -180,7 +185,10 @@ async function main() {
   // Trap 3 from WP4: the index-only scans need the visibility map, and a fresh bulk load has none. Without the VACUUM
   // the covering index is SLOWER than a sequential scan (136 ms → 43 ms in WP4), so every number below would be wrong
   // in the pessimistic direction. VACUUM reclaims nothing here and deletes nothing – it only marks pages visible.
+  // Twice on purpose: after a bulk load the first pass can leave pages that are not yet all-visible, and an
+  // index-only scan then still visits the heap – which is exactly what trap 3 warns about, only one step further in.
   await t("VACUUM ANALYZE", () => prisma.$executeRawUnsafe(`VACUUM ANALYZE "Exposure", "Order", "OrderAttribution", "Refund"`));
+  await t("VACUUM (second pass)", () => prisma.$executeRawUnsafe(`VACUUM "Exposure", "Order", "OrderAttribution", "Refund"`));
 
   console.log("\nLive aggregation (the number WP4 cares about):");
   const timings: number[] = [];
