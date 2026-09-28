@@ -4,6 +4,26 @@ Design-Spec für neue Software, die exakt wie das Sectionheroes-Admin-Dashboard 
 Diese Datei ist als Anweisung für Claude Code gedacht: **Halte dich beim Bauen von UI strikt an
 diese Tokens, Klassen und Rezepte.** Nicht improvisieren, keine anderen UI-Libraries.
 
+Diese Datei beschreibt **Bausteine**, keine Seiten. Was auf einer konkreten Seite steht, steht in
+`docs/plan.md` §5 – die Results-Seite mit ihren fünf Tabs in **WP5b**, die zugrunde liegenden Definitionen in den
+Verträgen 4.8 (Zählweise), 4.9 (Zeitreihen) und 4.10 (Segmente). Für die Results-Seite gebraucht werden aus dieser
+Datei die Rezepte **Segmented Tabs**, **DateRange-/Dropdown-Trigger**, **Tooltip**, **Accordion/Chevron**,
+**Chart-Tooltip & Legende** und die Chart-SVGs, dazu **§10 Content-Regeln**.
+
+> **Verweise immer über den Abschnittsnamen, nie über eine Zeilennummer.** Frühere Angaben wie „§390" oder „§506"
+> waren Zeilennummern und sind mit jeder Ergänzung verrutscht.
+>
+> **Zwei Rezepte fehlen weiterhin und werden für WP5b gebraucht** (ADR-0037):
+> 1. **Donut** – §1 erlaubt ihn, ein Rezept gibt es nicht. Gebraucht für Device- und Channel-Distribution.
+> 2. **Gestyltes Tooltip-Popover** – der Eintrag „Tooltip-„?"" in §7 setzt auf das native `title`-Attribut. Das lässt
+>    sich nicht stylen, erscheint verzögert und funktioniert auf Touch gar nicht. §5 nennt bereits einen
+>    „Tooltip-Popover `shadow-lg`" – das Rezept dazu fehlt. Nach §10 trägt die Results-Seite ~10 Tooltips, die alle
+>    Glossartexte zeigen; ohne Popover ist das nicht umsetzbar.
+>
+> Erledigt am 27.09.: Der Lab-Look steckt jetzt in den Theme-Tokens (§2), die Underline-Tabs für die Results-Tabs
+> haben ein Rezept (§7). Damit ist die Designsystem-Frage aus ADR-0037 entschieden – DESIGN.md gilt unverändert,
+> Slate/Emerald bleiben Theme-Werte und nie Klassennamen (§9).
+
 ---
 
 ## 1. Stack
@@ -14,7 +34,8 @@ diese Tokens, Klassen und Rezepte.** Nicht improvisieren, keine anderen UI-Libra
 - Gilt für das Dashboard und den Login. Die embedded Shopify-Merchant-Seite `/app/*` ist ausgenommen: dort ausschließlich Polaris Web Components, keine DESIGN.md-Bausteine (siehe `docs/adr/0029`).
   (24er-Viewbox, `stroke="currentColor" strokeWidth="2"`, 15–16px groß)
 - Charts: handgeschriebene SVGs (Area, Sparkline, Donut), keine Chart-Library
-- Font: **Inter** (Google Fonts laden), Fallback `system-ui`
+- Font: **Geist** für alles, **Geist Mono** für IDs, Keys, Daten, E-Mail-Adressen (beide über Google Fonts),
+  Fallback `system-ui` bzw. `ui-monospace`
 
 ```bash
 npm i tailwindcss @tailwindcss/vite daisyui
@@ -30,8 +51,15 @@ export default { plugins: [tailwindcss(), /* reactRouter() ... */] };
 
 ## 2. Theme-CSS (komplett übernehmen)
 
-Zwei Themes: `dark` (Original-Look) und `light`. Brand-Akzente (Mint + Lila) sind in **beiden**
-Modes identisch — nur Flächen, Borders, Text und Status-Farben wechseln.
+Zwei Themes:
+- `dark` – **Lab-Look** (seit 27.09.2026, entspricht den Figma-Foundations, Collection „Theme“ Mode Dark):
+  Slate-Flächen, Emerald als einziger Akzent, **invertierter Primary** (helle Fläche, dunkle Schrift). Tiefe entsteht
+  über Borders, nicht über Schatten.
+- `light` – unverändert der bisherige warme Look mit Mint + Lila. Wird separat angepasst; bis dahin nicht anfassen.
+
+Zusätzlich zu den daisyUI-Tokens gibt es vier eigene Tokens (`border-strong`, `nav-active`, `nav-active-bg`,
+`nav-active-line`), die als Tailwind-Farben verfügbar sind (`border-border-strong`, `text-nav-active` …). Ihre
+Light-Werte bilden den alten Look exakt nach.
 
 ```css
 /* app/app.css */
@@ -41,36 +69,36 @@ Modes identisch — nur Flächen, Borders, Text und Status-Farben wechseln.
   themes: false;
 }
 
-/* ── Dark (Original) ─────────────────────────────────────────────────────── */
+/* ── Dark (Lab-Look: Slate + Emerald) ────────────────────────────────────── */
 @plugin "daisyui/theme" {
   name: "dark";
   default: false;
   prefersdark: true; /* greift automatisch bei OS-Dark-Mode */
   color-scheme: dark;
 
-  --color-base-100: #1c1b1b; /* Seiten-Hintergrund */
-  --color-base-200: #2e2c2c; /* Panels / Cards / Inputs */
-  --color-base-300: #403d3d; /* Borders, aktive Tabs, Hover auf Inputs */
-  --color-base-content: #edeaea;
+  --color-base-100: #020617; /* slate-950 – Seiten-Hintergrund */
+  --color-base-200: #0f172a; /* slate-900 – Panels / Cards / Inputs */
+  --color-base-300: #1e293b; /* slate-800 – Borders, aktive Tabs, Hover auf Inputs */
+  --color-base-content: #f1f5f9; /* slate-100 */
 
-  --color-primary: #9dd1bb;         /* Mint — Hauptaktion */
-  --color-primary-content: #000000; /* IMMER schwarze Schrift auf Mint */
-  --color-secondary: #c5acd3;       /* Lila — Badges / sekundäre Akzente */
+  --color-primary: #f8fafc;         /* slate-50 – Hauptaktion, invertiert (helle Fläche) */
+  --color-primary-content: #0f172a; /* IMMER dunkle Schrift auf Primary */
+  --color-secondary: #c5acd3;       /* Lila – nur Plan-/Feature-Label */
   --color-secondary-content: #000000;
-  --color-accent: #c5acd3;
-  --color-accent-content: #000000;
+  --color-accent: #34d399;          /* emerald-400 – aktiv / positiv */
+  --color-accent-content: #022c22;
   --color-info: #c5acd3;
   --color-info-content: #000000;
 
-  --color-neutral: #171616;         /* Unsaved-Changes-Bar */
-  --color-neutral-content: #edeaea;
+  --color-neutral: #1e293b;         /* Unsaved-Changes-Bar */
+  --color-neutral-content: #f1f5f9;
 
-  --color-success: #4cc366;
-  --color-success-content: #0c2513;
-  --color-warning: #e9b24e;
-  --color-warning-content: #271e0a;
-  --color-error: #ff6b6b;
-  --color-error-content: #2d0f0f;
+  --color-success: #34d399;         /* emerald-400 */
+  --color-success-content: #022c22;
+  --color-warning: #fbbf24;         /* amber-400 */
+  --color-warning-content: #451a03;
+  --color-error: #f87171;           /* red-400 */
+  --color-error-content: #450a0a;
 
   --radius-selector: 0.5rem;
   --radius-field: 0.5rem;  /* Inputs/Buttons 8px */
@@ -123,8 +151,35 @@ Modes identisch — nur Flächen, Borders, Text und Status-Farben wechseln.
   --noise: 0;
 }
 
-@theme {
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+/* ── Eigene Tokens (Light-Werte = alter Look, Dark-Werte = Lab-Look) ─────── */
+:root, [data-theme="light"] {
+  --sh-border-strong: #e5e1e1;                                   /* Outline des Default-Buttons */
+  --sh-nav-active: #1c1b1b;                                      /* Text aktiver Nav-Eintrag */
+  --sh-nav-active-bg: color-mix(in oklab, #1c1b1b 10%, transparent);
+  --sh-nav-active-line: transparent;                             /* 2px-Linie links */
+}
+[data-theme="dark"] {
+  --sh-border-strong: #475569;                                   /* slate-600 */
+  --sh-nav-active: #34d399;                                      /* emerald-400 */
+  --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent); /* emerald-950/50 */
+  --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent); /* emerald-500/60 */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sh-border-strong: #475569;
+    --sh-nav-active: #34d399;
+    --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent);
+    --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent);
+  }
+}
+
+@theme inline {
+  --font-sans: "Geist", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --color-border-strong: var(--sh-border-strong);
+  --color-nav-active: var(--sh-nav-active);
+  --color-nav-active-bg: var(--sh-nav-active-bg);
+  --color-nav-active-line: var(--sh-nav-active-line);
 }
 
 @layer base {
@@ -133,6 +188,16 @@ Modes identisch — nur Flächen, Borders, Text und Status-Farben wechseln.
     background: var(--color-base-100);
     color: var(--color-base-content);
   }
+}
+
+/* Lab-Formen global, damit die Rezepte in §7 unverändert bleiben */
+@layer components {
+  .btn { font-weight: 500; }                                     /* Medium statt Semibold */
+  .btn:not(.btn-primary, .btn-secondary, .btn-accent, .btn-ghost, .btn-link, .btn-error, .btn-success, .btn-warning) {
+    border-color: var(--color-border-strong);                    /* Default-Button = Outline */
+  }
+  .badge { border-radius: 9999px; }                              /* Badges sind Pills */
+  .badge-soft { border-color: transparent; }                     /* farbige Badges ohne Rahmen */
 }
 
 /* Top-Ladebalken (indeterminate) bei laufender Navigation */
@@ -161,7 +226,7 @@ Fonts in `root.jsx` per `links()`:
 ```js
 { rel: "preconnect", href: "https://fonts.googleapis.com" },
 { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-{ rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" },
+{ rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" },
 ```
 
 ---
@@ -228,16 +293,20 @@ Platz für den Toggle: unten in der Sidebar neben der E-Mail / dem Abmelden-Butt
 | Text sekundär (Labels, Meta) | `text-base-content/60` | `text-gray-400` |
 | Text tertiär (Platzhalter „—", Counts) | `text-base-content/50`, `/40`, `/30` | — |
 | Hover-Fläche auf Zeilen/Nav | `bg-base-content/5`, `bg-base-content/[0.03]` | **`bg-white/5`** |
-| Aktiver Nav-Eintrag | `bg-base-content/10 text-base-content` | **`bg-white/10 text-white`** |
+| Aktiver Nav-Eintrag | `border-nav-active-line bg-nav-active-bg text-nav-active` (Rezept §6) | **`bg-white/10 text-white`**, `bg-emerald-*` |
 | Tag-Chip in Input | `bg-base-content/10` | `bg-white/10` |
-| Hauptaktion | `btn btn-primary` (Mint, schwarze Schrift) | — |
-| Sekundär-Akzent / Badge | `badge-secondary` (Lila, schwarze Schrift) | — |
+| Hauptaktion | `btn btn-primary` (Dark: helle Fläche + dunkle Schrift · Light: Mint + schwarze Schrift) | — |
+| Default-Button | `btn` (Outline in `border-strong`, siehe §2 `@layer components`) | eigene Border-Klassen |
+| Akzent aktiv / positiv | `text-success`, `bg-success/20` (Dark = Emerald) | `text-emerald-*`, Hex |
+| Sekundär-Akzent / Badge | `badge-secondary` (Lila, schwarze Schrift) – nur Plan-/Feature-Label | — |
 
-**Mint (`#9dd1bb`) und Lila (`#c5acd3`) nur als Fläche mit schwarzer Schrift verwenden**
-(`btn-primary`, `badge-primary`, `badge-secondary`, `bg-primary/20 text-primary` für kleine
-Feature-Kacheln im Dark Mode). **Nicht** als reine Textfarbe auf `base-100/200` — im Light Mode
-ist das unlesbar. Deshalb: `badge-soft` / `alert-soft` nur mit `success | warning | error`, nie mit
-`primary | secondary`.
+**Primary und Lila nur als Fläche mit Kontrast-Schrift verwenden** (`btn-primary`, `badge-primary`,
+`badge-secondary`). **Nicht** als reine Textfarbe auf `base-100/200` – Primary ist im Dark Mode fast weiß
+und im Light Mode Mint, beides als Text unbrauchbar. Deshalb: `badge-soft` / `alert-soft` nur mit
+`success | warning | error`, nie mit `primary | secondary`.
+
+**Emerald ist der einzige Akzent im Dark Mode** – für aktiv (Navigation) und positiv (Success). Rot nur für
+negativ/Fehler, Amber sparsam für Warnungen. Kein weiterer Akzent.
 
 Status-Farben (`success`, `warning`, `error`) dürfen pro Mode abweichen — sie sind in den Themes
 schon passend gesetzt. Einfach `badge-soft badge-success` etc. nutzen.
@@ -259,7 +328,9 @@ hinterlegen und per `[data-theme=light]` / `dark:`-Äquivalent tauschen (z. B. z
 - Basis: `text-sm` (14px) für fast alles; `text-xs` (12px) für Meta/Labels; `text-[11px] uppercase tracking-wider text-base-content/50` für Card-Titel und Sidebar-Gruppen.
 - Seitentitel: `text-2xl font-semibold`. Section-Titel in Forms: `text-base font-semibold`. Login-Card: `text-lg font-semibold`.
 - KPI-Wert: `text-xl font-semibold`, Zahlen mit `tabular-nums`.
-- Radius: Inputs/Buttons/Nav `rounded-lg` (8px), Tabs innen `rounded-md`, Cards/Tabellen/Dropdowns `rounded-box` (12px).
+- Schrift: Geist (`font-sans`); Keys, IDs, Datumswerte, E-Mail-Adressen in `font-mono` (Geist Mono).
+- Radius: Inputs/Buttons `rounded-lg` (8px), aktiver Nav-Eintrag `rounded-r-lg` (links eckig, an der Linie),
+  Tabs innen `rounded-md`, Cards/Tabellen/Dropdowns `rounded-box` (12px), Badges `rounded-full` (Pill).
 - Schatten nur für schwebende Elemente: Dropdowns `shadow-lg`, DateRange-Popover `shadow-xl`, Tooltip-Popover `shadow-lg`. Cards **kein** Schatten, nur `border border-base-300`.
 - Content-Padding: `main` = `px-10 py-8`. Cards `p-4` (Dashboard) bzw. `p-5` (Formulare). Grid-Gaps `gap-4`.
 - Transitions: `transition-colors` auf allem Klickbaren.
@@ -281,10 +352,11 @@ hinterlegen und per `[data-theme=light]` / `dark:`-Äquivalent tauschen (z. B. z
         <div className="px-2 pb-1.5 text-[11px] uppercase tracking-wider text-base-content/60">Gruppe</div>
         <NavLink to="/x" prefetch="intent"
           className={({ isActive, isPending }) =>
-            "mb-0.5 flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors " +
-            (isActive ? "bg-base-content/10 text-base-content"
-              : isPending ? "bg-base-content/5 text-base-content"
-              : "hover:bg-base-content/5")}>
+            "mb-0.5 flex items-center justify-between gap-2 rounded-r-lg border-l-2 py-2 pl-2 pr-2.5 text-sm transition-colors " +
+            (isActive ? "border-nav-active-line bg-nav-active-bg font-medium text-nav-active"
+              : isPending ? "border-transparent bg-base-content/5 text-base-content"
+              : "border-transparent hover:bg-base-content/5")}>
+          {/* border-l-2 an jedem Eintrag, damit der Text beim Aktivieren nicht springt; links eckig, rechts rund */}
           {({ isPending }) => (<>
             <span>Label</span>
             <span className="flex items-center gap-1.5">
@@ -300,7 +372,7 @@ hinterlegen und per `[data-theme=light]` / `dark:`-Äquivalent tauschen (z. B. z
     </nav>
 
     <div className="border-t border-base-300 pt-3">
-      <div className="truncate px-0.5 pb-2 text-xs text-base-content/60">user@mail.de</div>
+      <div className="truncate px-0.5 pb-2 font-mono text-xs text-base-content/60">user@mail.de</div>
       <div className="flex items-center gap-2">
         <button className="btn btn-ghost btn-sm flex-1 border-base-300 font-medium text-base-content/60 hover:text-base-content">Abmelden</button>
         <ThemeToggle />
@@ -399,6 +471,22 @@ const tabClass = (active) =>
 </div>
 ```
 
+### Underline Tabs (Seiten-Tabs, z. B. Results: Overview · Goals · Devices · Visitors · Channels)
+Figma: Komponente `Results / Tabs`, Property `Style=Underline` (die Segmented-Variante gibt es dort als `Style=Segmented`).
+Die Tab-Leiste sitzt am unteren Rand des Seiten-Headers; die aktive Linie liegt auf dessen Border.
+```jsx
+const underlineTab = (active) =>
+  "border-b-2 px-3.5 pt-1.5 pb-3 text-sm transition-colors " +
+  (active ? "border-base-content/90 font-medium text-base-content"
+          : "border-transparent text-base-content/60 hover:text-base-content");
+
+<nav className="-mb-px flex items-end gap-1 overflow-x-auto">
+  <a className={underlineTab(true)}>Overview</a>
+  <a className={underlineTab(false)}>Goals <span className="ml-2 rounded-full bg-base-content/12 px-2 py-px text-xs font-medium text-base-content/80">3</span></a>
+</nav>
+```
+Zähler neutral grau, nie farbig.
+
 ### Filter-Button + Filter-Chips
 ```jsx
 <button className={"rounded-lg px-3 py-2 text-sm transition-colors " +
@@ -448,14 +536,16 @@ Freies Panel (z. B. Filter): `absolute left-0 top-full z-20 mt-1.5 w-80 rounded-
 ```
 
 ### Buttons
-- Primär: `btn btn-primary` (+ `btn-sm` in Bars/Tabellen, `btn-xs` in Chips, `btn-block` in Login)
-- Sekundär/Default: `btn btn-sm` (daisyUI-Default = base-200-Fläche)
+Alle Buttons `font-medium` (global in §2). Radius 8px, keine Pills.
+- Primär: `btn btn-primary` (+ `btn-sm` in Bars/Tabellen, `btn-xs` in Chips, `btn-block` in Login) – im Dark Mode hell mit dunkler Schrift
+- Sekundär/Default: `btn btn-sm` – base-200-Fläche mit Outline in `border-strong` (global in §2)
 - Ghost: `btn btn-ghost btn-sm`
 - Icon-Only: `btn btn-ghost btn-sm btn-square`
 - Destruktiv: `btn btn-error btn-sm` oder `btn btn-ghost btn-sm text-error`
 - Textlink: `hover:underline`; Löschen-X in Listen: `text-base-content/30 hover:text-error`
 
 ### Badges
+Alle Badges sind Pills (`rounded-full`, global in §2); `badge-soft` hat keinen Rahmen.
 - Status: `badge badge-sm badge-soft badge-success` (aktiv) · `badge-soft badge-warning` (eingefroren/pausiert) · `badge-soft badge-error` · `badge-ghost` (inaktiv / neutral)
 - Tags: `badge badge-sm badge-outline`
 - Counter in Nav: `badge badge-primary badge-xs`
@@ -578,7 +668,9 @@ Chevron: 16px SVG `m9 6 6 6-6 6`, `shrink-0 text-base-content/40 transition-tran
 ## 9. Do / Don't
 
 **Do**
-- Nur daisyUI-Semantik-Tokens (`base-*`, `primary`, `secondary`, `neutral`, `success/warning/error`) + Opacity-Modifier (`/60`, `/40` …).
+- Nur daisyUI-Semantik-Tokens (`base-*`, `primary`, `secondary`, `accent`, `neutral`, `success/warning/error`) und die
+  eigenen Tokens aus §2 (`border-strong`, `nav-active*`) + Opacity-Modifier (`/60`, `/40` …). Keine Tailwind-Paletten
+  wie `slate-*` oder `emerald-*` in Klassen – die Slate/Emerald-Werte stecken nur im Theme.
 - Cards flach: Border, kein Schatten. Schatten nur für Popovers.
 - Kompakt: `btn-sm`, `table-sm`, `input-sm` in Bars; Standardgröße nur in Formularen.
 - Icons als Inline-SVG, `currentColor`, 15–16px, in `text-base-content/40–50`.
@@ -588,3 +680,51 @@ Chevron: 16px SVG `m9 6 6 6-6 6`, `shrink-0 text-base-content/40 transition-tran
 - Kein `badge-soft` / `alert-soft` mit `primary` oder `secondary`.
 - Keine `shadow-*` auf Cards, keine `rounded-full` Buttons, keine Gradienten (außer bewusst als AI-Feature-Button).
 - Keine zusätzlichen UI-Libraries (Polaris, shadcn, Radix, MUI, Headless UI).
+
+---
+
+## 10. Content-Regeln (Joel, 27.09.2026 – gilt für jede Seite, in Figma und im Code)
+
+Leitsatz: **So wenig Content wie möglich, so viel wie nötig.** Ein Laie ohne Statistik-Hintergrund muss die Seite
+lesen können. Vor jeder Seite beim Minimum anfangen und jede Zeile, Spalte und jedes Badge fragen: „Braucht ein Laie
+das hier?“ Entstanden am Results-Overview (Figma: `Results / a-running-no-verdict / dark / lab-slate · v3`).
+
+**Reihenfolge**
+- Zahlen zuerst, dann Kontext (Distribution, Hypothese/Setup), dann Checks und History.
+
+**Text**
+- Keine Fußnoten unter Tabellen, keine Erklärzeilen unter Charts, keine Untertitel, die nur beschreiben, was man sieht.
+- Kein Element ohne Funktion (z. B. ein Hinweis, der nur erklärt, warum es hier keine Filter gibt).
+- Kein Jargon im sichtbaren Text („excluded from n“ → „not counted in any numbers“).
+- Ausnahme: Text, den ein Vertrag ausdrücklich sichtbar verlangt (z. B. der Channels-Hinweis aus 4.10), bleibt sichtbar.
+  Kollidiert das mit dieser Regel, den Konflikt ansprechen statt ihn in einen Tooltip zu verschieben.
+
+**Tooltips („?“) – nur, wo ein Laie wirklich stolpert**
+- Ja: Fachbegriffe und Begriffe mit überraschender Definition – z. B. Sample Size / „Not yet conclusive“, SRM,
+  Guardrail, Tainted days, Key, Salt, Visitor type („new“ = neu im Shop), Channel (Last Touch, weicht von Shopify
+  Analytics ab), Conversions vs. Orders.
+- Nein: selbsterklärende Labels – Spaltenköpfe wie Visitors, Orders, Revenue, AOV, Device, Mobile/Desktop, Primary
+  metric, Bot traffic, Code edits, Legendenzeilen.
+- Ein Tooltip pro Begriff an der ersten Stelle, nicht an jeder Legendenzeile darunter. Texte weiter aus dem
+  Glossar-Modul.
+
+**Tabellen und Daten**
+- Eine Gesamttabelle statt mehrerer Teiltabellen; wird sie zu breit, scrollt sie horizontal in ihrem eigenen
+  Container, die erste Spalte bleibt stehen.
+- Gesperrte oder leere Werte („unlocks at …“) bekommen keine eigene Spalte – die Spalte erscheint, wenn es den Wert gibt.
+- Hervorhebung der Primärmetrik über Größe und eine leicht hinterlegte Spalte, nicht über zusätzlichen Text.
+- Abgeleitetes klein unter dem Wert (Lift „+11,6 % vs A“), nicht als eigene Spalte. Vor erreichter Sample Size
+  bleiben Lifts neutral grau – nie grün/rot.
+- Keine Deko-Charts (Sparklines in Tabellen), wenn der richtige Chart in einem anderen Tab liegt.
+- Keine Doppelangaben: Prozent **oder** absolute Zahl sichtbar, das andere im Hover.
+- Keine Badges in Tabellenzeilen, die schon an anderer Stelle stehen (Code-Edit steht in Checks/History).
+
+**Status**
+- Vorläufiges ist klein: ein nicht finaler Status (Verdict vor Sample Size) ist eine schmale Zeile; groß wird er erst,
+  wenn er etwas aussagt.
+
+**Technische Infos**
+- IDs und Technisches (Experiment-Key, Salt) nie in den Header, sondern ins Setup bzw. zugeklappte Details.
+
+**Laden**
+- Kein Auto-Polling. Laden beim Öffnen, neu laden bei Rückkehr in den Tab, Refresh-Button mit „Updated n s ago“.

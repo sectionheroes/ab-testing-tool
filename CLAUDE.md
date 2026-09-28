@@ -24,7 +24,8 @@ pnpm test:db        # database-backed suite against the local Postgres; every ca
 pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js, prints raw + gzip, fails above 8 KB gzip; then deploy --config dev
 pnpm db:migrate     # prisma migrate dev against the local Postgres (.env = postgresql://<user>@localhost:5432/sh_ab_dev)
 pnpm seed:admin <email>   # upsert a dashboard ADMIN (script, not a migration)
-pnpm seed:load [exposures] [orders]   # synthetic load fixture on the LOCAL db (default 1M/30k); prints the aggregation timings
+pnpm seed:load [exposures] [orders]   # synthetic load fixture on the LOCAL db (default 1M/30k); prints the aggregation and breakdown timings
+pnpm measure:load [experimentId]      # re-measures an EXISTING fixture without seeding – for iterating on a query
 pnpm sync:config <shop>   # reserve `server` + rebuild/write the `client` metafield from RUNNING experiments
 pnpm experiment:status <shop> <key> <RUNNING|PAUSED|ENDED> [decision]   # status change via the service layer (writes the metafield)
 pnpm variant:code <shop> <key> <variant> --js <file> --css <file>       # code save via the service layer (hotfix on RUNNING)
@@ -36,10 +37,14 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
 
 ## Non-negotiable rules
 - Contracts in docs/plan.md §4 (cart attribute format, metafield schemas, bucketing, exposure payload, editing rule)
-  never change. If a task seems to require changing them, stop and ask.
+  never change. If a task seems to require changing them, stop and ask. A *new* contract may be added next to an
+  existing one as long as it leaves that one's format and semantics alone – that is how 4.1b, 4.9 and 4.10 came to be.
+  Exactly two real amendments are sanctioned, both by ADR: 4.4 (ADR-0028) and the `n` field in 4.5 (ADR-0035).
 - UI outside /app/*: follow docs/DESIGN.md strictly – its tokens, classes and recipes. No Polaris, shadcn, MUI, Radix, icon or chart
   libraries. All UI text in English (this overrides DESIGN.md §8, which says German). Numbers and currency formatted
   `de-DE` (1.234,56 €) unless docs/plan.md §8 says otherwise.
+- Content on every dashboard page (Figma and code) follows docs/DESIGN.md §10: as little as possible, as much as
+  needed, readable for a layperson; explanations in tooltips only where a layperson would stumble, never footnotes.
 - UI on /app/* (embedded merchant page): Polaris Web Components only (`<s-page>`, `<s-section>`, `<s-button>` …),
   no Tailwind/daisyUI, no DESIGN.md components, and never `<s-button variant="primary">` – secondary (white) only.
 - Money always comes from `*_price_set.shop_money.amount`. Never `total_price`, never presentment currency.
@@ -59,10 +64,45 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
 - Raw SQL against a DateTime column binds its bounds through `utcTimestamp()` (app/services/stats.server.ts). A plain
   `${date}` parameter is sent as `timestamptz` and gets reinterpreted in the session timezone, which differs between a
   dev machine and Render – it looks right locally and is wrong in production.
-- The dashboard never shows p-values or a winner before plannedSampleSize is reached. Counts and revenue are live
-  (query, not DailyStat); only the verdict waits.
-- One conversion is one identity: `Order.customerId`, else the order itself (ADR-0032) – nothing links an order to a
-  visitorId. Per-device order numbers only exist for orders linkable to an exposure; the UI must say so (WP5).
+- Measure before and after every query change, with `pnpm measure:load`, and read the EXPLAIN rather than guessing.
+  Four traps, all of them measured, all of them cost an order of magnitude (WP4 and WP4.1):
+  1. **No lateral join against a materialised CTE.** Query `"Exposure"` directly so its indexes are used.
+  2. **A day is a UTC interval, never `to_char(...)` and never a `::date` group key on a big scan.** For a dimension
+     the covering index serves, join against a small `VALUES` list of day intervals – a computed key cannot be read in
+     index order, so Postgres sorts a million rows and spills to disk. For a dimension that has to visit the heap
+     anyway (channel, which needs `referrer` and `utm`), the interval join is *wrong*: 30 range scans mean 30× random
+     heap access. There the per-row date plus a hash aggregate wins, by 1.404 ms against 206 ms.
+  3. **`VACUUM` twice after a bulk load, before measuring.** Index-only scans need the visibility map, and the first
+     pass leaves pages that are not yet all-visible (measured: 27.162 heap fetches after one pass, 31 after two).
+  4. **Do not pin the planner by accident.** A `LATERAL … LIMIT 1` against a UNIQUE index is a plain `LEFT JOIN` with
+     extra steps, and the `LIMIT` forces a nested loop the planner would otherwise not choose.
+- The dashboard never shows p-values or a winner before the stopping rule of ADR-0036 is met: at least
+  `minConversionsPerArm` converting visitors per arm (default 1,000), at least `minDurationDays` days (default 14),
+  and only on a full-week boundary counted from `startedAt` in the shop timezone – never from Monday. Counts and
+  revenue are live (query, not DailyStat); only the verdict waits. `significant = stoppingRuleMet && p < alpha` is not
+  negotiable, and the rule may only be tightened while RUNNING (contract 4.6) – loosening it would unlock a p-value.
+  The tool never stops a test by itself; a failing futility projection is a warning, nothing more.
+- One conversion is one visitor: the snippet carries the visitorId in its own cart attribute `_ab_v` (contract 4.1b)
+  and the aggregation joins orders to exposures through it (ADR-0033, supersedes ADR-0032). `_ab_v` never carries the
+  variant – that stays in `_ab` (4.1), which is unchanged. Orders without `_ab_v` fall back to the ADR-0032 identity
+  (`Order.customerId`, else the order itself) and land in the `unknown` device bucket. `unknown` is a visible fourth
+  bucket: the device rows always sum to the totals.
+- Report time series follow contract 4.9: four charts per goal, a conversion counts on the day its visitor was first
+  exposed (shop timezone), cumulative ratios are computed from cumulative numerators and denominators, and there is no
+  certainty-over-time chart. Charts come from the live query with a day dimension, never from DailyStat.
+- A date range or segment filter on Results is explore-only (ADR-0034): it changes charts and raw numbers, and while
+  it is active the p-value, CI, significance, winner, sample-size progress and SRM badge are hidden, not recomputed.
+  The Overview tab has no filters at all, because the verdict lives there.
+- The segment dimensions of contract 4.10 (device, visitor type, channel) never show a p-value, CI or winner, and the
+  improvement badge appears only from 100 visitors and 25 conversions per arm. No cross-filters between dimensions.
+  Channel is derived from `Exposure.referrer`/`utm` at exposure time – last touch, and it will not match Shopify
+  Analytics; the UI has to say so under the table.
+- Every explained term in the UI gets its text from the glossary module, never inline in JSX – one definition per
+  term, so the same term cannot drift between pages. Which terms get a tooltip at all is governed by DESIGN.md §10:
+  only where a layperson stumbles, once per term at its first occurrence, never on self-explanatory column headers.
+- Results never polls. It loads on open, reloads on tab focus and has a refresh button with "Updated n s ago"
+  (DESIGN.md §10, ADR-0037). A value that is still locked gets no column of its own, and a lift stays neutral grey
+  until the stopping rule is met – colour is a verdict.
 - Editing a RUNNING experiment follows contract 4.6: code fields allowed with warning + AuditLog + report marker;
   targeting, allocation, weights and salt are locked.
 - Snippet budget: 8 KB gzip. Snippet errors must never break the merchant's page – every variant runs in try/catch,

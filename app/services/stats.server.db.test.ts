@@ -170,7 +170,7 @@ describe("visitors and conversions (contract 4.8, ADR-0032)", () => {
 describe("tainted days (ADR-0026) – in Shop.timezone, not UTC", () => {
   it("removes exactly that day's exposures and their orders", async () => {
     const result = await inRollback(async (tx) => {
-      const f = await seedExperiment(tx, { timezone: "Europe/Berlin", plannedSampleSize: 1 });
+      const f = await seedExperiment(tx, { timezone: "Europe/Berlin" });
       // 2026-10-03 in Berlin is 2026-10-02T22:00Z .. 2026-10-03T22:00Z.
       await addExposure(tx, f, { at: "2026-10-02T21:00:00Z", customerId: "keep-early" }); // 2 Oct local
       await addExposure(tx, f, { at: "2026-10-02T23:00:00Z", customerId: "taint-1" }); // 3 Oct local
@@ -256,10 +256,10 @@ describe("tainted days (ADR-0026) – in Shop.timezone, not UTC", () => {
 });
 
 describe("evaluate() over real data", () => {
-  it("stays insignificant below the planned sample size and turns significant once it is reached", async () => {
+  it("stays insignificant while the stopping rule is unmet and turns significant once it is met (ADR-0036)", async () => {
     const result = await inRollback(async (tx) => {
-      const f = await seedExperiment(tx, { plannedSampleSize: 1_000 });
-      // 40 visitors per arm, control 5 conversions, variant 25 – p is tiny, the plan is not met.
+      const f = await seedExperiment(tx, { minConversionsPerArm: 1_000 });
+      // 40 visitors per arm, control 5 conversions, variant 25 – p is tiny, the rule is not met.
       for (let i = 0; i < 40; i++) {
         await addExposure(tx, f, { variant: "a", at: "2026-10-02T09:00:00Z", visitorId: `a${i}` });
         await addExposure(tx, f, { variant: "b", at: "2026-10-02T09:00:00Z", visitorId: `b${i}` });
@@ -267,19 +267,47 @@ describe("evaluate() over real data", () => {
       for (let i = 0; i < 5; i++) await addOrder(tx, f, { variant: "a", at: "2026-10-03T10:00:00Z", customerId: `ca${i}`, total: 100 });
       for (let i = 0; i < 25; i++) await addOrder(tx, f, { variant: "b", at: "2026-10-03T10:00:00Z", customerId: `cb${i}`, total: 100 });
       const below = await computeExperimentStats(f.experiment.id, { now: NOW, db: tx });
-      await tx.experiment.update({ where: { id: f.experiment.id }, data: { plannedSampleSize: 40 } });
+      await tx.experiment.update({ where: { id: f.experiment.id }, data: { minConversionsPerArm: 5 } });
       const reached = await computeExperimentStats(f.experiment.id, { now: NOW, db: tx });
       return { below, reached };
     });
 
     expect(byKey(result.below, "b").pValue!).toBeLessThan(0.001);
-    expect(result.below.sampleSizeReached).toBe(false);
+    expect(result.below.stoppingRule.met).toBe(false);
     expect(byKey(result.below, "b").significant).toBe(false);
     expect(result.below.winner).toBeNull();
 
-    expect(result.reached.sampleSizeReached).toBe(true);
+    expect(result.reached.stoppingRule.met).toBe(true);
     expect(byKey(result.reached, "b").significant).toBe(true);
     expect(result.reached.winner).toBe("b");
+  });
+
+  it("holds the verdict back on a running experiment that has not run long enough (ADR-0036)", async () => {
+    const stats = await inRollback(async (tx) => {
+      // Started 8 days before `now`, duration condition 14 days: conversions are there, time is not.
+      const f = await seedExperiment(tx, {
+        startedAt: new Date("2026-10-12T00:00:00Z"),
+        minConversionsPerArm: 1,
+        minDurationDays: 14,
+        requireFullWeeks: true,
+      });
+      for (let i = 0; i < 40; i++) {
+        await addExposure(tx, f, { variant: "a", at: "2026-10-12T09:00:00Z", visitorId: `a${i}` });
+        await addExposure(tx, f, { variant: "b", at: "2026-10-12T09:00:00Z", visitorId: `b${i}` });
+      }
+      for (let i = 0; i < 5; i++) await addOrder(tx, f, { variant: "a", at: "2026-10-13T10:00:00Z", visitorId: `a${i}`, total: 100 });
+      for (let i = 0; i < 25; i++) await addOrder(tx, f, { variant: "b", at: "2026-10-13T10:00:00Z", visitorId: `b${i}`, total: 100 });
+      return computeExperimentStats(f.experiment.id, { now: NOW, db: tx });
+    });
+    const conditions = Object.fromEntries(stats.stoppingRule.conditions.map((c) => [c.key, c]));
+    expect(conditions.minConversionsPerArm.met).toBe(true);
+    expect(conditions.minDurationDays.met).toBe(false);
+    expect(stats.stoppingRule.met).toBe(false);
+    expect(byKey(stats, "b").pValue!).toBeLessThan(0.001);
+    expect(byKey(stats, "b").significant).toBe(false);
+    // Counts and revenue are live regardless – only the verdict waits (ADR-0019).
+    expect(byKey(stats, "b").converters).toBe(25);
+    expect(stats.stoppingRule.evaluableOn).toBe("2026-10-26"); // 12 Oct + 14 days
   });
 
   it("device numbers add up to the totals when every order links", async () => {
@@ -293,7 +321,7 @@ describe("evaluate() over real data", () => {
     });
     const a = byKey(stats, "a");
     const sum = (pick: (d: { visitors: number; orders: number; revenue: number }) => number) =>
-      pick(a.byDevice.mobile) + pick(a.byDevice.desktop) + pick(a.byDevice.tablet);
+      pick(a.byDevice.mobile) + pick(a.byDevice.desktop) + pick(a.byDevice.tablet) + pick(a.byDevice.unknown);
     expect(sum((d) => d.visitors)).toBe(a.visitors);
     expect(sum((d) => d.orders)).toBe(a.orders);
     expect(sum((d) => d.revenue)).toBe(a.revenue);

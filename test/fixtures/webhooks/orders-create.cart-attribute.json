@@ -96,6 +96,10 @@
     {
       "name": "_ab",
       "value": "demo-test:b"
+    },
+    {
+      "name": "_ab_v",
+      "value": "44f15d3c-6f0a-4b1e-9f7c-2a1b8e0d5c31"
     }
   ],
   "number": 2,

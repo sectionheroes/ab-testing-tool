@@ -1,13 +1,18 @@
 import type { AttributionSource } from "@prisma/client";
 import prisma from "../db.server";
-import { extractAbValue, parseAbValue } from "./ab-value";
+import { extractAbValue, extractVisitorId, parseAbValue } from "./ab-value";
 
-export type Attribution = { experimentId: string; variantId: string; source: AttributionSource };
+export type Attribution = { experimentId: string; variantId: string; visitorId: string | null; source: AttributionSource };
 
 /**
  * Contract 4.1, in this exact order: note_attributes[_ab] → first non-empty line_items[].properties[_ab] →
  * CUSTOMER_LOOKUP via Exposure.customerId. Unknown experiment/variant keys are ignored but logged.
  * The attribution window (4.8) is applied by stats.server – here we only record what the order carried.
+ *
+ * Contract 4.1b rides along: `_ab_v` is read from the same two places, validated as a UUID v4, and written to every
+ * attribution row of the order. It is independent of `_ab` – an order can carry one without the other – and it is the
+ * same value for every experiment, because it identifies the visitor, not the test. On the CUSTOMER_LOOKUP path there
+ * is no `_ab_v` by definition (the order never touched a cart of ours), so it stays null and ADR-0032 applies.
  */
 export async function resolveAttributions(input: {
   shopId: string;
@@ -16,6 +21,7 @@ export async function resolveAttributions(input: {
   customerId: string | null;
   payload: Record<string, unknown>;
 }): Promise<Attribution[]> {
+  const visitor = extractVisitorId(input.payload);
   const carried = extractAbValue(input.payload);
   if (carried) {
     const pairs = parseAbValue(carried.value);
@@ -23,7 +29,10 @@ export async function resolveAttributions(input: {
       console.warn(`[attribution] order ${input.shopifyOrderId}: _ab value does not match contract 4.1: ${JSON.stringify(carried.value)}`);
       return [];
     }
-    return resolveKeys(input.shopId, input.shopifyOrderId, pairs, carried.source);
+    if (!visitor) {
+      console.warn(`[attribution] order ${input.shopifyOrderId}: _ab present but no valid _ab_v – falling back to the ADR-0032 identity`);
+    }
+    return resolveKeys(input.shopId, input.shopifyOrderId, pairs, carried.source, visitor?.value ?? null);
   }
   if (!input.customerId) return [];
   return customerLookup(input.shopId, input.customerId, input.orderCreatedAt);
@@ -34,6 +43,7 @@ async function resolveKeys(
   shopifyOrderId: string,
   pairs: { experimentKey: string; variantKey: string }[],
   source: AttributionSource,
+  visitorId: string | null,
 ): Promise<Attribution[]> {
   const experiments = await prisma.experiment.findMany({
     where: { shopId, key: { in: pairs.map((p) => p.experimentKey) } },
@@ -48,7 +58,7 @@ async function resolveKeys(
       console.warn(`[attribution] order ${shopifyOrderId}: unknown ${exp ? "variant" : "experiment"} key ${experimentKey}:${variantKey} – ignored`);
       continue;
     }
-    out.push({ experimentId: exp.id, variantId: variant.id, source });
+    out.push({ experimentId: exp.id, variantId: variant.id, visitorId, source });
   }
   return out;
 }
@@ -77,7 +87,7 @@ async function customerLookup(shopId: string, customerId: string, orderCreatedAt
   for (const e of exposures) {
     if (seen.has(e.experimentId)) continue;
     seen.add(e.experimentId);
-    out.push({ experimentId: e.experimentId, variantId: e.variantId, source: "CUSTOMER_LOOKUP" });
+    out.push({ experimentId: e.experimentId, variantId: e.variantId, visitorId: null, source: "CUSTOMER_LOOKUP" });
   }
   return out;
 }

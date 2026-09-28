@@ -3,9 +3,13 @@
 The statistics engine. Pure TypeScript, no database, no imports from `app/` (ESLint boundary, plan §2). Everything the
 dashboard, the CLI and the frozen snapshot report comes from here.
 
-`STATS_VERSION` (currently **1.0.0**) is written into every `ExperimentResult` snapshot (ADR-0025). **Bump it by hand
+`STATS_VERSION` (currently **2.0.0**) is written into every `ExperimentResult` snapshot (ADR-0025). **Bump it by hand
 whenever a formula changes** – a new test statistic, a different CI method, a change to the winsorization rule, the
 Bonferroni rule or a sample-size formula. Adding a field or fixing a comment is not a formula change.
+
+**2.0.0 (WP4.1)** changed two things that move numbers, hence the major bump: the conversion count (one conversion is
+one *visitor* now that `_ab_v` binds orders to exposures, ADR-0033 – it was one *identity* under ADR-0032) and the
+evaluability rule (the three-condition stopping rule of ADR-0036 replaced the single `plannedSampleSize`).
 
 ## What is in here
 
@@ -17,8 +21,16 @@ Bonferroni rule or a sample-size formula. Adding a field or fixing a comment is 
 | `srmCheck(observed, weights)` | Sample Ratio Mismatch | Pearson chi-square goodness of fit, `df = k − 1`, alarm at `p < 0.001` |
 | `sampleSize({ … })` | planning | Fleiss normal approximation for CR, two-sample means formula for RPV/AOV |
 | `rpvMomentsFromOrders(cr, amounts)` | σ of RPV from order history | `Var(RPV) ≈ CR·E[AOV²] − (CR·AOV)²` (plan WP4) |
+| `conversionsForMde` / `mdeFromConversions` | the planner, both ways | `MDE ≈ (z_{1−α/2} + z_power)·√(2/C)` (ADR-0036) |
+| `rpvSurcharge(targetPower)` | the RPV correction | derived from the measured power, see below |
+| `evaluateStoppingRule({ … })` | when a verdict may be read | the three conditions of ADR-0036 |
+| `classifyChannel(referrer, utm)` | traffic source of an exposure | the ten groups of contract 4.10, first rule wins |
 | `evaluate(experiment, variantStats, statsVersion)` | the verdict | applies contract 4.8 end to end |
 | `guardrail(variantStats)` | breakage hint | from 500 visitors per arm, CR below half the control's |
+
+`timezone.ts` holds the calendar arithmetic both the aggregation and the stopping rule need – the UTC interval a local
+day covers, and the day counting that week boundaries rest on. It lives here rather than in `app/services` because
+`evaluate()` needs it and `lib/` must not import from `app/` (plan §2); `app/services/timezone.ts` re-exports it.
 
 `distributions.ts` holds the normal, Student-t and chi-square CDFs and quantiles (Hart 1968 for Φ, Acklam plus one
 Halley step for Φ⁻¹, Numerical Recipes continued fractions for the incomplete beta and gamma). They agree with
@@ -26,12 +38,51 @@ scipy 1.13.1 to ~1e-12; `test/distributions.test.ts` pins that.
 
 ## The one rule
 
-> `significant` is `true` only when `sampleSizeReached && pValue < alpha`.
+> `significant` is `true` only when `stoppingRuleMet && pValue < alpha`.
 
-Never otherwise, in no branch, for no metric. No planned sample size means never significant. `evaluate()` enforces
-it in one place and `test/evaluate.test.ts` asserts it with a p-value below 0.001 that still returns
-`significant: false`. Fixed-horizon testing is the whole point of ADR-0018 – peeking is the failure mode this tool
-exists to avoid.
+Never otherwise, in no branch, for no metric. `evaluate()` enforces it in one place and `test/evaluate.test.ts` asserts
+it with a p-value below 0.001 that still returns `significant: false`. Fixed-horizon testing is the whole point of
+ADR-0018 – peeking is the failure mode this tool exists to avoid.
+
+## The stopping rule (ADR-0036)
+
+Three conditions, **all of them that are set** have to be met. All of them off means never significant, exactly as a
+missing `plannedSampleSize` did before.
+
+| Condition | Default | Meaning |
+|---|---|---|
+| `minConversionsPerArm` | 1 000 | converting visitors in the **slowest** arm (4.8) |
+| `minDurationDays` | 14 | calendar days since `startedAt`, in `Shop.timezone` |
+| `requireFullWeeks` | true | only on multiples of 7 days **from the start date**, never from Monday |
+
+`evaluate()` returns a status per condition plus an overall `met` and `evaluableOn` – the latest of the three end
+dates, with the conversions one projected from the pace so far. Before the first conversion there is no pace, so the
+date stays `null` rather than being guessed. A projected date more than six weeks after the start sets a **futility**
+warning: the MDE is too small for this traffic. Nothing is ever stopped automatically – same posture as the guardrail.
+
+Why conversions and not visitors: the relative standard error of a conversion count is ≈ √(1/C), so 1 000 conversions
+per arm buy ~12.5 % relative MDE whether the shop converts at 1 % or at 5 %. A visitor target would need a baseline CR
+we do not have, because we only ever see the visitors of a running experiment, never the shop's whole traffic.
+
+The rule may only be **tightened** while an experiment is `RUNNING` (contract 4.6, enforced in
+`experiments.server.ts`). Loosening it would let anyone set the threshold below the current stand and unlock a p-value
+on demand – the back door that would make the whole fixed horizon decorative.
+
+## Channels (contract 4.10)
+
+`classifyChannel(referrer, utm, { selfHosts })` returns one of ten groups, first matching rule wins. It is **derived,
+never stored**: change a host or medium list and old reports change with it, except for ENDED experiments, which read
+the frozen snapshot (ADR-0025). That is intended, and it is why `CHANNEL_LISTS_VERSION` exists.
+
+Two departures from the printed order of 4.10, both deliberate and both tested:
+
+- `organic_shopping` is checked before `organic_search`, because `shopping.google.com` and `google.com/shopping` are
+  shopping surfaces on a search-engine host. No host is genuinely in both lists, so nothing else moves.
+- `selfHosts` (the shop's own domain) is not in the contract, but "any other **external** referrer" implies it.
+  Without it every internal navigation would count as a `referral`.
+
+The numbers will not match Shopify Analytics: different attribution moment (exposure, not purchase) and a different
+model. The results page has to say so under the table.
 
 Related: only the **primary** metric gets a p-value. Secondary metrics carry an estimate and a confidence interval and
 nothing else (4.8). With more than two variants, alpha is divided by the number of comparisons (Bonferroni).
@@ -78,9 +129,20 @@ Two reasons, both inherent to the formula plan WP4 specifies:
    variant's variance grows with the effect.
 2. `Var(RPV) ≈ CR·E[AOV²] − (CR·AOV)²` treats a visitor as having at most one order, which understates the variance.
 
-So read the planner as a floor, not a promise, and round up for RPV tests. The gap is pinned by a test
-(`documents how much power that same n really has…`) so it cannot drift unnoticed; if it ever reaches 80 % or drops
-below 60 %, this section is wrong and needs rewriting.
+So read the planner as a floor, not a promise. **The surcharge is derived from that measurement, not estimated**
+(ADR-0036 explicitly retires an earlier guessed "20–25 %"). For a two-sample mean test,
+power = Φ(√(n/2)·Δ/σ − z_{1−α/2}), so the measured power fixes √(n/2)·Δ/σ at the n the planner returned and asking for
+the target power instead scales n by
+
+    n₁/n₀ = ( (z_{1−α/2} + z_target) / (z_{1−α/2} + z_measured) )²
+
+At α = 0.05, measured 71.6 % and target 80 % that is **1.2253** – round up by about 23 %. `sampleSize()` returns it as
+`perVariantConservative` next to the floor, so a caller cannot forget to apply it, and it is 1 for CR, where the
+formula holds.
+
+The gap is pinned by a test (`documents how much power that same n really has…`), which also asserts that the measured
+power still matches `RPV_POWER_AT_PLANNED_N` within 2 SE – if the implementation drifts, the test fails rather than the
+surcharge silently going wrong. If it ever reaches 80 % or drops below 60 %, this section is wrong and needs rewriting.
 
 ## A/A Monte-Carlo: measured false-positive rate
 
@@ -128,21 +190,35 @@ both arms, so the arm that happened to produce the larger outliers keeps more of
 estimate shrinks. That is the price of the 4.8 rule, it is small, and it stays comfortably inside the band. A per-arm
 cap would be cheaper statistically and is explicitly not what the contract says.
 
-## Order → visitor: the approximation in the conversion count
+## Order → visitor: how a conversion is counted
 
-Contract 4.8 defines the conversion rate on **converting visitors**: a visitor with three orders converts once. But
-nothing ties an order to a `visitorId` – the `_ab` cart attribute (contract 4.1, frozen) carries only
-`<experiment>:<variant>`, and `Exposure.customerId` is filled only for visitors who were logged in (4.5).
+Contract 4.8 defines the conversion rate on **converting visitors**: a visitor with three orders converts once. Since
+WP4.1 that is literally true for every order that had cart contact, and an approximation only for the rest.
 
-So one conversion is one **identity**: `Order.customerId` when the order has one, otherwise the order itself
-(**ADR-0032**).
+**The `_ab_v` path (ADR-0033).** The snippet carries the visitorId in its own cart attribute (contract 4.1b) and the
+ingest writes it to `OrderAttribution.visitorId`. Where it is there, the order joins straight onto its visitor's
+`Exposure`: converters are `COUNT(DISTINCT visitorId)`, revenue per visitor is per real visitor, the attribution
+window's lower bound is that visitor's own `firstSeenAt`, and the device is `Exposure.device`. Guests included – that
+was the whole point.
+
+**The ADR-0032 fallback**, for orders without `_ab_v` (no cart contact, the `CUSTOMER_LOOKUP` path). A conversion is
+then an *identity*: `Order.customerId` when the order has one, otherwise the order itself.
 
 - Repeat purchases by a logged-in customer count **once**. Correct.
 - Repeat purchases by a guest with no customer id count **more than once**. A known, small upward bias on CR.
 - It applies to both arms the same way, so a lift is affected far less than a level.
-- `evaluate()` clamps converters to visitors so CR can never exceed 100 %, and puts a warning in the output when the
-  clamp fires.
+- `evaluate()` still clamps converters to visitors so CR can never exceed 100 %, and warns when the clamp fires. It is
+  a safety net now rather than a routine correction.
 
-Everything downstream follows from this: revenue per visitor is grouped by the same identity, and the per-device split
-of orders and revenue only exists for orders that could be linked to an exposure. `stats.server.ts` reports
-`deviceLinkRate` and `ordersWithoutDevice` so the results page can say what share the device numbers rest on.
+An order that names a visitor or a customer we *have* seen in the experiment, but never in a matching exposure before
+the order, does not count – that is 4.8's own rule, and `_ab_v` is what finally made it checkable for guests. An id we
+have never seen an exposure for is a lost beacon, not a mismatch, and stays in.
+
+**`unknown` is the fourth device bucket**, and it is visible (4.10). Orders we could not tie to an exposure have no
+device; without the bucket the device rows would not sum to the totals. It is a data-quality reading, not a migration
+artefact: if the share jumps in production, something about the cart attribute broke. `stats.server.ts` also reports
+`deviceLinkRate` and `ordersWithoutDevice`. The WP4 load fixture measured a device link rate of 31 % under ADR-0032;
+under ADR-0033 the same fixture measures **86 %**.
+
+The `unknown` bucket is the one place `evaluate()` does **not** clamp converters to visitors: its visitors are always 0
+by construction, and clamping would zero the bucket and break the only thing it exists for.

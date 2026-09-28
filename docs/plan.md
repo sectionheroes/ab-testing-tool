@@ -1,6 +1,14 @@
-# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v3.9)
+# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v4.3)
 
 *Stand: 18.09.2026, v2 nach Joels Feedback. Baut auf dem Konzept-Doc auf (gleicher Ordner). UI-Design nach `DESIGN.md` (gleicher Ordner – ins Repo kopieren). Ziel: Das MVP so in Arbeitspakete schneiden, dass Claude Code jedes Paket in ein bis drei Sessions umsetzen kann, mit klaren Abnahmekriterien, und dass die Basis für Preis-/Versandtests (Phase 3) schon drin ist.*
+
+**v4.3 (27.09., nach dem Design-Review):** WP5b nach dem gezeichneten Entwurf überarbeitet (ADR-0037, kein Vertrag geändert). Overview jetzt: **Performance-Tabelle → schmale Verdict-Statuszeile → Distribution/Setup → Checks/History**. Eine Gesamttabelle über alle Goals statt nur der Primärmetrik; der Goals-Tab behält nur die Charts. Keine CI-Spalte vor erfüllter Stopp-Regel, Lifts bis dahin neutral grau. Header ohne Key und Shop-Domain, dafür mit Edit. Kein Auto-Polling mehr – Refresh-Button und Tab-Fokus. Tooltips stark reduziert nach der neuen **DESIGN.md §10 „Content-Regeln"**. **Offen und blockierend für 5b:** das Designsystem (Figma-Lab-Dark mit Hex vs. DESIGN.md/daisyUI mit Mint), zwei fehlende DESIGN.md-Rezepte (Donut, gestyltes Tooltip-Popover) und der Widerspruch, dass die gezeichnete Statuszeile noch die abgelöste visitor-basierte `plannedSampleSize` zeigt statt der Stopp-Regel aus ADR-0036.
+
+**v4.2 (27.09., vor WP5):** Stopp-Regel statt einzelner `plannedSampleSize` (ADR-0036, konkretisiert ADR-0018): **≥ 1.000 Conversions pro Arm · ≥ 14 Tage · nur auf vollen Wochengrenzen ab Startdatum**, alle drei einzeln abschaltbar, Defaults aus der bisherigen Sectionheroes-Praxis. Grund: Conversions sind shop-unabhängig (MDE ≈ 2,8·√(2/C)), Visitors nicht – und die Visitor-Zahl bräuchte eine Baseline-CR, die wir mangels Gesamttraffic nicht haben. Branchenrecherche im ADR: volle Wochen sind Konsens (Kohavi, Convert, SplitBase), bei den Conversions liegt die Branche mit 100–400 deutlich lockerer als wir. Neu dazu: Mindestlaufzeit unabhängig von den Conversions und eine Futility-Warnung ab 6 Wochen Prognose. Vertrag **4.6 ergänzt**: Stopp-Regel bei `RUNNING` nur verschärfbar, nie lockerer – sonst schaltet man sich per Schwellensenkung einen p-Wert frei. `evaluate()` gibt Status je Bedingung plus `evaluableOn`; Rechner übersetzt beidseitig MDE ↔ Conversions.
+
+**v4.1 (23.09., vor WP5):** Results-Seite auf fünf Tabs nach Shoplift-Vorbild (Overview · Goals · Devices · Visitors · Channels) mit persistentem Header für Status, Laufzeit und Start/Pause/Stop. Neuer Vertrag **4.10** (Segment-Dimensionen: Device, Visitor-Typ, Channel inkl. Klassifikationsregeln, Improvement-Schwelle 100 Visitors / 25 Conversions pro Arm, keine Cross-Filter). Vertrag **4.5 geändert** – Feld `n` für new/returning (ADR-0035, zweite sanktionierte Vertragsänderung nach 4.4). Channel-Auswertung braucht **keine** neue Datenerhebung: `Exposure.referrer` und `Exposure.utm` werden seit WP3 geschrieben. WP4.1 um `classifyChannel()` und eine generische `breakdown(experiment, dimension, opts)` erweitert. WP5 in drei Sessions geteilt (5a Dashboard + Editor · 5b Results · 5c API/CLI), Glossar-Modul für alle Tooltips.
+
+**v4.0 (23.09., vor WP5):** Report-Ausbau nach Joels Figma-Review. Neu: Vertrag **4.1b** (`_ab_v` – die `visitorId` als eigenes Cart-Attribut; ergänzt 4.1, ändert es nicht) und Vertrag **4.9** (Zeitreihen: vier Charts pro Goal, Tageszuordnung nach Expositions-Tag, Daily/Cumulative, kein Certainty-Chart). ADR-0033 ersetzt ADR-0032 – die Order-→-Visitor-Näherung wird durch einen echten Join ersetzt, damit Device-Zahlen auch für Gast-Orders stimmen und die CR-Verzerrung verschwindet. ADR-0034 grenzt Datums-Range und Device-Filter als „Explore" vom Urteil ab. Neues **WP4.1** (Snippet + Ingest + Aggregation + Tages-Query) zwischen WP4 und WP5; WP5-Results in vier Blöcke gegliedert. **Offen:** Die Tageszuordnung (Expositions-Tag) steht auf dem Konsistenz-Argument – weder ABLyft noch Shoplift noch Varify dokumentieren ihre eigene.
 
 **v3.9 (21.09., WP1-Fix):** Polaris zurück – aber nur auf der embedded Merchant-Seite `/app/*`, als Polaris Web Components (`<s-*>` aus dem App-Bridge-Script, kein npm-Polaris), Buttons ausschließlich `variant="secondary"` (weiß, nie primary/schwarz). Dashboard und Login bleiben DESIGN.md-only. ADR-0029, ersetzt ADR-0004 in diesem Punkt.
 
@@ -52,7 +60,8 @@
 | Visitor-ID | **Eigener JS-Cookie `_shab_vid` mit localStorage-Spiegel** (Option D, ADR-0028): Cookie → localStorage → UUID v4; beide bei jedem Page Load mit 365 Tagen neu geschrieben. Kein `_shopify_y`. Regel in 4.4. `customer.id` ist Metadatum und wird beim Login server-side mit der Zuteilung verknüpft (4.5), nie Bucketing-Input. | `_shopify_y` wird seit 01.01.2026 nicht mehr gesetzt, App-Proxy strippt `Set-Cookie` (ADR-0099 e/f). Keine Infrastruktur pro Kunde. ITP kappt nur Besucher, die > 7 Tage nicht da waren – akzeptierter Bias (8.5): verdünnt den Lift, erzeugt nie einen falschen Winner. Cross-Device für eingeloggte Kunden erst Phase 2. |
 | Consent | Pro Shop `requireConsent`. Einzige Schnittstelle ist `Shopify.customerPrivacy`; das Consent-Tool des Kunden (Cookiebot, Consentmo, Pandectes …) muss diese API bedienen. Ohne Consent: Control, kein Cookie, kein Exposure, kein Attribut. | Joels Entscheidung (8.2). Ob ein Shop ohne Consent trackt, entscheidet der Kunde, nicht das Tool. |
 | Zählung | Vertrag 4.8: Visitors = Exposures ohne Bots; Orders = alles, was durch den Shopify-Checkout ging (kein POS, kein Draft, kein `test`), nicht storniert; CR auf konvertierende Visitors; Urteil nur auf der Primärmetrik. | Sonst rechnet jede Session anders. |
-| Order → Visitor | Eine Conversion ist eine **Identität**: `Order.customerId`, sonst die Order selbst (ADR-0032). Konverter werden auf Visitors gekappt (CR nie > 100 %), Device-Zahlen für Orders gibt es nur für verknüpfbare Orders (`deviceLinkRate`). | Nichts verbindet eine Order mit einer `visitorId` – 4.1 trägt nur `<experiment>:<variant>`, `Exposure.customerId` nur für eingeloggte Besucher. Bekannte kleine CR-Verzerrung nach oben, wirkt in beiden Armen gleich. |
+| Order → Visitor | Das Snippet setzt die `visitorId` als eigenes Cart-Attribut `_ab_v` (Vertrag 4.1b); die Aggregation joint darüber direkt auf die `Exposure` – Konverter = `COUNT(DISTINCT visitorId)`, RPV pro echtem Visitor, Device aus `Exposure.device` (ADR-0033, ersetzt ADR-0032). Orders ohne `_ab_v` fallen auf die Identitäts-Näherung zurück und landen im Device-Bucket `unknown`. | `_ab` trägt laut 4.1 nur `<experiment>:<variant>`; ein **zusätzlicher** Key ändert 4.1 nicht. Damit wird 4.8 („ein Visitor konvertiert einmal") erstmals wörtlich erfüllt, und der Device-Split gilt auch für Gast-Orders. |
+| Segmente im Report | Drei Dimensionen (Device, Visitor-Typ new/returning, Channel) als eigene Tabs, Vertrag 4.10. Nie mit p-Wert, CI oder Winner (ADR-0034); Improvement erst ab 100 Visitors und 25 Conversions pro Arm; keine Cross-Filter. | Channel ist reine Ableitung aus `Exposure.referrer`/`utm` (seit WP3 gespeichert). Der Visitor-Typ kostete die einzige Änderung an 4.5 (ADR-0035). Segmente sind Hypothesen-Generatoren, keine Entscheidungen. |
 | Snippet-Delivery | Theme App Extension, App Embed Block mit `target: head` | Liegt auf `cdn.shopify.com`, ein Klick im Theme Editor, überlebt Theme-Updates |
 | Config-Delivery | Shop-Metafield `$app:sh_ab.client`, inline in Liquid | Null extra Request, Kill Switch = Metafield-Update |
 | Exposure-Tracking | `fetch keepalive` an App Proxy `/apps/sh-ab/e`, Merker erst bei 2xx | First-party, Ad-Blocker-resistent, kein stummer Verlust bei 5xx |
@@ -69,6 +78,7 @@
 | Retention | `WebhookEvent.payload` nur bei Fehler; `WebhookEvent`-Zeilen nach 30 Tagen, `Exposure` nach 12 Monaten gelöscht (`/jobs/cleanup`, WP6); `Order.raw` schlanke Whitelist; Orders/Refunds/DailyStat/AuditLog/`ExperimentResult` dauerhaft (`rahmen.md` §3, ADR-0024) | Speicher ist der einzige wachsende Posten; Rohdaten mit Personenbezug brauchen eine Frist. |
 | Ergebnis-Snapshot | `ExperimentResult` (§3): versioniertes JSON, einmal beim Übergang auf `ENDED` eingefroren, nie neu berechnet; Report für beendete Experimente liest nur den Snapshot (ADR-0025) | Ergebnisse müssen ≥ 2 Jahre abrufbar sein, Rohdaten nicht – und ein alter Report darf sich nach Änderungen an der Stats-Engine nicht ändern. |
 | Tainted Days | `Experiment.taintedDays` manuell im Dashboard (WP5), aus dem Auswertungsfenster ausgeschlossen (WP4), im Report und Snapshot sichtbar; automatische Erkennung Phase 2 (ADR-0026) | Regel aus `rahmen.md` 7.2 ohne Detektor-Infrastruktur umsetzbar. |
+| Stopp-Regel | Drei Bedingungen statt einer Sample Size: **≥ 1.000 Conversions pro Arm**, **≥ 14 Tage**, **volle Wochen ab Startdatum** (ADR-0036). `significant` nur bei erfüllter Regel; bei `RUNNING` nur verschärfbar (4.6). Futility-Warnung ab 6 Wochen Prognose, nie Auto-Stop. | Bildet die bestehende Sectionheroes-Praxis ab und ist strenger als der Branchenstandard (100–400 Conversions). Conversions sind shop-unabhängig, Visitors bräuchten eine Baseline-CR, die wir nicht haben. |
 | Alerts | Dashboard-Badges (SRM, keine Exposures 24 h, Reconciliation-Diff, Snippet-Fehler) **und** Slack-Webhook bei `MISMATCH` + täglicher Digest (WP6, ADR-0027) | Badges dort, wo man hinschaut; Slack, weil niemand täglich das Dashboard öffnet. |
 
 ---
@@ -101,10 +111,10 @@ sh-ab/
 │   │   ├── login.tsx             # Google OAuth (Start + Callback)
 │   │   └── dashboard.*.tsx       # DAS PRODUKT: Shops, Experiments, Editor, Results, Reconciliation
 │   ├── services/
-│   │   ├── attribution.server.ts # note_attributes / line_items → Zuordnung
+│   │   ├── attribution.server.ts # note_attributes / line_items → Zuordnung (`_ab` 4.1 und `_ab_v` 4.1b)
 │   │   ├── metafields.server.ts  # Config-Writer
 │   │   ├── reconciliation.server.ts
-│   │   ├── stats.server.ts       # Aggregation-Queries, ruft lib/stats
+│   │   ├── stats.server.ts       # Aggregation-Queries + breakdown() (4.9/4.10), ruft lib/stats
 │   │   └── auth.server.ts        # Google OAuth, Session-Cookie, Allowlist, Rollen + Shop-Scoping
 │   └── db.server.ts              # Prisma Client
 ├── extensions/
@@ -113,7 +123,9 @@ sh-ab/
 │       └── assets/shab.js        # gebautes Snippet (aus lib/snippet)
 ├── lib/
 │   ├── snippet/                  # Client-Script, TypeScript, esbuild → extensions/.../shab.js
-│   ├── stats/                    # Stats-Engine, pure functions, keine DB
+│   ├── stats/                    # Stats-Engine, pure functions, keine DB; enthält auch timezone.ts (Kalendertage,
+│   │                             #   Tagesintervalle) – evaluate() braucht sie für die Stopp-Regel und lib/ darf nicht
+│   │                             #   aus app/ importieren; app/services/timezone.ts re-exportiert nur noch
 │   └── cli/                      # sh-ab CLI (Zusatz)
 ├── prisma/
 │   ├── schema.prisma
@@ -158,7 +170,11 @@ model Experiment {
   trigger           Json                      // { type: "immediate" } | { type: "visible", selector }
   hideUntilApplied  Boolean  @default(false)
   primaryMetric     Metric                    // CR | RPV | AOV
-  plannedSampleSize Int?                      // pro Variante, aus Sample-Size-Rechner
+  // Stopp-Regel (ADR-0036) – ersetzt das frühere Einzelfeld `plannedSampleSize`. Alle gesetzten Bedingungen müssen
+  // erfüllt sein; sind alle null, bleibt `significant` dauerhaft false.
+  minConversionsPerArm Int?     @default(1000)  // konvertierende Visitors je Arm (4.8)
+  minDurationDays      Int?     @default(14)    // Kalendertage seit startedAt in Shop.timezone
+  requireFullWeeks     Boolean  @default(true)  // nur auf Vielfachen von 7 Tagen ab startedAt (nicht ab Montag)
   startedAt         DateTime?
   endedAt           DateTime?
   decision          Decision?                 // WINNER | NO_DIFFERENCE | INVALID | ABORTED – Pflicht beim Stop
@@ -179,8 +195,8 @@ model ExperimentResult {                    // eingefrorener Ergebnis-Snapshot �
   frozenAt      DateTime
   snapshot      Json                      // evaluate()-Output (WP4) + eingefrorener Kontext, ohne Personenbezug:
                                           //  numbers: je Variante n, conversions, orders, revenue, cr, rpv, aov, lift, ci, pValue – gesamt und je Device (mobile/desktop/tablet);
-                                          //           srm { pValue, observed, expected }; window { from, to }; taintedDays; sampleSizeReached; botShare
-                                          //  frozen:  hypothesis, primaryMetric, plannedSampleSize, variants[{ key, name, weight, isControl, js, css }],
+                                          //           srm { pValue, observed, expected }; window { from, to }; taintedDays; stoppingRule { conditions[], met, evaluableOn }; botShare
+                                          //  frozen:  hypothesis, primaryMetric, Stopp-Regel (minConversionsPerArm, minDurationDays, requireFullWeeks), variants[{ key, name, weight, isControl, js, css }],
                                           //           targeting, allocation, salt, trigger, hideUntilApplied, startedAt, endedAt,
                                           //           codeChanges[{ at, actor, variantKey }] (aus AuditLog CODE_CHANGED_WHILE_RUNNING)
                                           //  verdict: decision, conclusion
@@ -219,6 +235,7 @@ model Exposure {                          // Retention: 12 Monate, dann löscht 
   customerId    String?                   // Shopify customer id – per Login-Link (4.5) gesetzt, nie Bucketing-Input
   firstSeenAt   DateTime
   device        String                    // mobile | desktop | tablet
+  isNewVisitor  Boolean?                  // Vertrag 4.5 Feld `n` (ADR-0035): beim Page Load lag keine gültige _shab_vid vor. null = altes Snippet → Segment `unknown` (4.10)
   country       String?
   referrer      String?
   utm           Json?
@@ -265,8 +282,10 @@ model OrderAttribution {
   orderId       String
   experimentId  String
   variantId     String
+  visitorId     String?                   // Vertrag 4.1b: das `_ab_v` der Order, beim Ingest als UUID v4 validiert (ADR-0033). null → Fallback ADR-0032, Device-Bucket `unknown`
   source        AttributionSource         // CART_ATTRIBUTE | LINE_ITEM_PROPERTY | CUSTOMER_LOOKUP
   @@id([orderId, experimentId])
+  @@index([visitorId])
 }
 
 model Refund {
@@ -343,6 +362,11 @@ model ApiToken {                          // Bearer-Token für API und CLI
 
 ## 4. Verträge (werden nie geändert)
 
+*Ein bestehender Vertrag wird nie geändert – ein neuer **hinzugefügt** werden darf, solange er keinen bestehenden in
+Format oder Semantik berührt. So entstanden 4.1b (ergänzt 4.1 um einen eigenen Key, ohne `_ab` anzufassen) und 4.9
+(ergänzt 4.8 um die Darstellung über die Zeit, ohne eine Zähl-Definition zu verschieben). Die einzige echte Änderung
+an einem Vertrag bleibt 4.4 über ADR-0028, weil deren Grundlage weggefallen war.*
+
 ### 4.1 Cart Attribute & Line Item Property
 
 ```
@@ -358,6 +382,28 @@ Beispiel: pdp-reviews-above-price:b,free-shipping-bar:a
 - Zusätzlich als `<input type="hidden" name="properties[_ab]" value="...">` in jedes `form[action*="/cart/add"]` injiziert (MutationObserver für dynamisch geladene Forms).
 - Server-side beim Webhook: erst `note_attributes[_ab]`, wenn leer dann `line_items[*].properties[_ab]` (erste nicht-leere), wenn auch das leer ist und die Order eine `customer.id` hat: Lookup in `Exposure` über `customerId` (Login-Link, 4.5) für alle zum Order-Zeitpunkt laufenden Experimente. Quelle wird in `OrderAttribution.source` gespeichert (`CART_ATTRIBUTE` | `LINE_ITEM_PROPERTY` | `CUSTOMER_LOOKUP`).
 - Phase 3: Shopify Functions lesen exakt dieses Attribut. Deshalb ändert sich das Format nie.
+
+### 4.1b Cart Attribute `_ab_v` – Visitor-Bindung
+
+```
+Key:    _ab_v
+Value:  <visitorId>
+Beispiel: 44f15d3c-6f0a-4b1e-9f7c-2a1b8e0d5c31
+```
+
+- Die `visitorId` aus ADR-0028, unverändert und ohne Kürzung. Validierung beim Ingest: UUID v4.
+- Gesetzt über denselben Pfad und unter derselben Bedingung wie `_ab` (4.1: `POST /cart/update.js` bei Änderung von
+  Wert oder Cart-Token), und zusätzlich als `<input type="hidden" name="properties[_ab_v]">` in jedem
+  `form[action*="/cart/add"]`.
+- Der Unterstrich macht den Key zu einer **private property**: versteckt vor Cart, Checkout, Kundenansicht sowie
+  gedruckten und gemailten Belegen; sichtbar im Admin, in der Admin API und in Order-Webhooks – wie `_ab`.
+- Server-side beim Webhook: erst `note_attributes[_ab_v]`, dann `line_items[*].properties[_ab_v]` (erste nicht-leere),
+  Ergebnis nach `OrderAttribution.visitorId`. Fehlt der Wert, bleibt das Feld null und es gilt der Fallback aus
+  ADR-0032 (Identität = `Order.customerId`, sonst die Order selbst).
+- `_ab_v` ist **kein Ersatz** für `_ab`: die Varianten-Zuordnung kommt weiterhin ausschließlich aus `_ab`. `_ab_v`
+  bindet die Order nur an den Visitor. Beide Attribute sind unabhängig voneinander gültig.
+- Format und Semantik von 4.1 bleiben unverändert – 4.1b ist eine Ergänzung, keine Änderung. Die Zusage „Phase 3:
+  Shopify Functions lesen exakt dieses Attribut" bezieht sich weiterhin auf `_ab`.
 
 ### 4.2 Metafield `client` – Schema
 
@@ -424,7 +470,7 @@ else:
 
 ```json
 { "v": 1, "e": "pdp-reviews-above-price", "var": "b", "vid": "…", "cid": null,
-  "url": "/products/x", "dev": "mobile", "ref": "https://instagram.com/…",
+  "url": "/products/x", "dev": "mobile", "n": true, "ref": "https://instagram.com/…",
   "utm": { "source": "ig", "medium": "paid", "campaign": "…" }, "t": 1726650000 }
 ```
 
@@ -432,6 +478,7 @@ else:
 - Transport: `fetch(url, { method: "POST", keepalive: true })`, **nicht** `sendBeacon`. Der Merker in `localStorage` wird erst bei 2xx gesetzt; bei Fehler oder fehlender Antwort wird beim nächsten Page Load erneut gesendet (server-side idempotent). Sonst ist jeder 5xx während eines Deploys ein stumm und endgültig verlorener Visitor.
 - Login-Link: Ist `customerId` gesetzt, sendet das Snippet einmal pro Session `POST /apps/sh-ab/link` mit `{ vid, cid }`; der Server setzt `Exposure.customerId` für alle Exposures dieses `vid`. Damit bleibt die Variante beim Login stabil, und Orders ohne Attribut können über den Kunden zugeordnet werden (4.1).
 - Consent (8.2): Bei `requireConsent` läuft das Snippet erst, wenn `Shopify.customerPrivacy.analyticsProcessingAllowed()` true ist – initial oder nach dem Event `visitorConsentCollected`. Vorher: kein Cookie, kein Bucketing, Control, nichts gesendet.
+- **`n` (new visitor, ADR-0035, geändert am 23.09.2026):** `true`, wenn beim Page Load weder Cookie noch localStorage eine gültige `_shab_vid` enthielten, die ID also gerade erzeugt wurde; sonst `false`. Persistiert als `Exposure.isNewVisitor`. Optional – fehlt das Feld, bleibt die Spalte null und die Auswertung zeigt das Segment `unknown`. „new" heißt **neu im Shop**, nicht neu im Test, und stützt sich auf Browser-Storage: Inkognito, gelöschte Cookies und ein Gerätewechsel zählen als neu.
 - Server verifiziert die App-Proxy-Signatur, ergänzt `country` (falls verfügbar) und `isBot` aus User-Agent, schreibt mit `ON CONFLICT DO NOTHING`.
 - Parallel: `Shopify.analytics.publish("shab_exposure", {...})` für Custom Pixels und `window.dataLayer.push({ event: "shab_exposure", ... })` falls GTM vorhanden.
 
@@ -439,6 +486,7 @@ else:
 
 - `DRAFT` / `PAUSED`: frei editierbar.
 - `RUNNING`: Code-Felder editierbar, aber: Warnung im UI ("This experiment is live. Saving changes the variant for all future visitors and taints the results."), Eintrag `CODE_CHANGED_WHILE_RUNNING` im AuditLog, Metafield sofort aktualisiert (Hotfix-Fähigkeit), und der Results-Report zeigt einen Marker "variant changed on <date>" ab diesem Zeitpunkt. Targeting, Allocation, Weights, Salt sind bei `RUNNING` **gesperrt** (würden das Bucketing verschieben).
+- **Stopp-Regel** (ADR-0036): bei `RUNNING` nur **verschärfbar** – mehr Conversions, mehr Tage, volle Wochen einschalten. Lockern (weniger Conversions, weniger Tage, volle Wochen ausschalten) nur in `DRAFT`/`PAUSED`. Jede Änderung: AuditLog `STOPPING_RULE_CHANGED` und Marker im Report. Ohne diese Sperre könnte man die Schwelle unter den aktuellen Stand setzen und sich damit einen p-Wert freischalten.
 - CLI: `sh-ab push` auf `RUNNING` nur mit `--force`, gleiche Konsequenzen.
 
 ### 4.7 CLI-Dateiformat (Zusatz-Workflow)
@@ -446,7 +494,7 @@ else:
 ```
 experiments/
 └── pdp-reviews-above-price/
-    ├── experiment.json      # key, name, hypothesis, shop, allocation, targeting, trigger, primaryMetric, plannedSampleSize
+    ├── experiment.json      # key, name, hypothesis, shop, allocation, targeting, trigger, primaryMetric, Stopp-Regel (4.6/ADR-0036)
     ├── b.js
     └── b.css
 ```
@@ -463,6 +511,106 @@ experiments/
 - **AOV** = Revenue / Orders; Basis sind Orders, nicht Visitors. Als Primärmetrik nur mit Warnung im UI: konditional auf Kauf – ändert die Variante die CR, verschiebt sich die Population.
 - **Tagesgrenzen** (DailyStat, Reconciliation) in `Shop.timezone`, nicht UTC – so rechnet auch Shopify Analytics.
 - **Urteil** (p-Wert, `significant`, Winner) nur für die Primärmetrik. Sekundärmetriken zeigen Schätzer und CI, keinen p-Wert. Mehr als zwei Varianten: jede gegen Control, Bonferroni auf α.
+
+
+### 4.9 Zeitreihen im Report (Daily / Cumulative)
+
+Ergänzt 4.8 um die Darstellung über die Zeit. 4.8 bleibt unverändert die Grundlage jeder einzelnen Zahl.
+
+**Welche Charts.** Pro Goal genau vier, nach einer Regel statt nach drei Listen:
+
+> **Visitors · die Volumen-Basis der Metrik · die Metrik selbst · Improvement.**
+> Volumen-Basis ist **Conversions** bei CR und **Revenue** bei RPV und AOV.
+
+| Primärmetrik | Charts |
+|---|---|
+| CR | Visitors · Conversions · Conversion Rate · Improvement |
+| RPV | Visitors · Revenue · Revenue per Visitor · Improvement |
+| AOV | Visitors · Revenue · Average Order Value · Improvement |
+
+Union über alle Goals: sieben Serien, angezeigt werden immer nur vier. Jede Serie hat eine Linie pro Variante.
+
+**Nicht enthalten:** „Certainty"/Konfidenz über Zeit. Ein solcher Chart lädt dazu ein, täglich zu prüfen, ob die Linie
+die 95 % kratzt, und dann zu stoppen – das ist genau das Peeking, gegen das ADR-0018 den festen Horizont setzt
+(bayesianische Tools dürfen das, wir nicht). Ersatz ist eine **Sample-Size-Fortschrittslinie** (n von N, mit
+Hochrechnung des voraussichtlichen Enddatums). Ebenfalls nicht enthalten: Value Distribution (Histogramm, passt nicht
+auf die Zeitachse).
+
+**Tageszuordnung: Expositions-Tag (Kohorte).** Ein Visitor zählt an dem Tag, an dem er zum ersten Mal exponiert wurde
+(`Exposure.firstSeenAt` in `Shop.timezone`, 4.8). Seine Conversions und sein Umsatz zählen **an demselben Tag**, egal
+wann tatsächlich gekauft wurde.
+
+- Folge 1: Die Charts sind in sich konsistent – der CR-Chart ist an jedem Punkt exakt Conversions ÷ Visitors, und der
+  kumulative Verlauf endet rechts genau auf den Zahlen der Tabelle darüber. Das ist der Grund für diese Wahl.
+- Folge 2: Die letzten ein bis zwei Tage sind systematisch zu niedrig – wer heute exponiert wurde, hatte noch keine
+  Zeit zu kaufen. Die letzte Tagesstrecke wird deshalb grau gestrichelt gezeichnet, mit Fußnote „recent days are
+  still filling in".
+- Folge 3: Werte vergangener Tage ändern sich nachträglich noch, wenn späte Orders eingehen. Das ist korrekt und
+  gewollt.
+- Die Alternative (Buchung auf den Order-Tag) ist bewusst verworfen: sie wäre intuitiver, aber dann wäre der CR-Chart
+  nicht mehr Conversions ÷ Visitors und der kumulative Endpunkt träfe die Tabellenzahl nicht.
+- Anmerkung zur Marktlage: Weder ABLyft noch Shoplift noch Varify dokumentieren ihre Tageszuordnung. ABLyft
+  dokumentiert lediglich die beiden Modi („cumulated" und „day-wise"). Die Entscheidung hier steht auf dem
+  Konsistenz-Argument, nicht auf einem Branchenstandard.
+
+**Daily und Cumulative.** Beide Modi kommen aus **derselben** Tages-Query; Cumulative ist die laufende Summe im
+Client, kein zweiter Datenweg. Verhältnisse (CR, RPV, AOV, Improvement) werden im kumulativen Modus aus den
+**kumulierten Zählern und Nennern** gerechnet, nie als Durchschnitt der Tageswerte – sonst sind sie systematisch
+verzerrt. Improvement steht im kumulativen Modus per Default, weil die Tageswerte früh fast nur Rauschen sind.
+
+**Quelle.** Dieselbe Live-Aggregation wie die Hauptzahlen, nur mit zusätzlicher Tagesdimension (ADR-0019), per
+Resource-Route deferred nachgeladen. **Nicht** `DailyStat`: das Modell hat keine `converters`-Spalte, eine CR daraus
+wäre Orders ÷ Visitors und widerspräche 4.8. `DailyStat` bleibt Historie (Phase 2).
+
+**Tainted Days** (ADR-0026) werden in den Charts als Lücke gezeichnet, nicht als Null und nicht interpoliert.
+
+### 4.10 Segment-Dimensionen (Devices, Visitors, Channels)
+
+Drei Dimensionen, eine gemeinsame Query `breakdown(experiment, dimension, opts)`. Alle drei unterliegen ADR-0034:
+Rohzahlen, Raten und Improvement ja – p-Wert, Konfidenzintervall, Signifikanz, Winner nein.
+
+**Device** – aus `Exposure.device`, Orders über `_ab_v` (4.1b).
+
+| Wert | Bedeutung |
+|---|---|
+| `mobile` · `desktop` · `tablet` | UA-Klassifikation im Snippet zum Expositions-Zeitpunkt |
+| `unknown` | Order nicht auf eine Exposure zurückführbar (kein `_ab_v`, ADR-0033). Visitors sind nie `unknown`. |
+
+**Visitor-Typ** – aus `Exposure.isNewVisitor` (4.5, Feld `n`).
+
+| Wert | Bedeutung |
+|---|---|
+| `new` | beim Page Load war keine gültige `_shab_vid` vorhanden |
+| `returning` | ID kam aus Cookie oder localStorage |
+| `unknown` | Feld fehlte (altes Snippet) |
+
+**Channel** – abgeleitet aus `Exposure.referrer` und `Exposure.utm`, **zum Zeitpunkt der Exposition** (Last Touch).
+Reine Ableitung, kein gespeicherter Wert. Reihenfolge der Prüfung, erste Regel gewinnt:
+
+| Gruppe | Regel |
+|---|---|
+| `paid_social` | `utm.medium` ∈ {`cpc`, `ppc`, `paid`, `paidsocial`, `paid_social`} **und** Quelle/Referrer ist ein soziales Netz |
+| `paid_search` | `utm.medium` ∈ {`cpc`, `ppc`, `paid`} **und** Quelle/Referrer ist eine Suchmaschine |
+| `paid_other` | `utm.medium` ∈ {`cpc`, `ppc`, `paid`, `display`, `banner`, `affiliate`} |
+| `email` | `utm.medium` ∈ {`email`, `e-mail`, `newsletter`} oder `utm.source` enthält `klaviyo`, `mailchimp`, `brevo` |
+| `organic_social` | Referrer-Host ist ein soziales Netz, ohne Paid-Medium |
+| `organic_search` | Referrer-Host ist eine Suchmaschine, ohne Paid-Medium |
+| `organic_shopping` | Referrer-Host ist ein Marktplatz/Preisvergleich (Google Shopping, Idealo, Amazon, …) |
+| `referral` | sonstiger externer Referrer |
+| `direct` | kein Referrer und kein UTM |
+| `unassigned` | UTM vorhanden, aber keine Regel greift |
+
+Die Host- und Medium-Listen liegen als Konstanten in `lib/stats` und sind versioniert; wer sie ändert, ändert alte
+Reports mit – außer bei beendeten Experimenten, die aus dem Snapshot lesen (ADR-0025). Das ist gewollt.
+
+> **Hinweispflicht:** Die Channel-Zahlen weichen von Shopify Analytics ab – anderer Attributionszeitpunkt (Exposition
+> statt Kauf) und anderes Modell. Der Hinweis steht unter der Tabelle, nicht in einer FAQ.
+
+**Improvement-Schwelle.** Ein Improvement-Wert wird pro Segmentzeile erst ab **100 Visitors und 25 Conversions pro
+Arm** angezeigt; darunter steht ein Strich mit Tooltip „too few". Ohne diese Schwelle produziert jede Segmenttabelle
+dreistellige Prozentwerte auf einstelligen Fallzahlen.
+
+**Keine Cross-Filter.** Jeder Tab filtert ausschließlich nach seiner eigenen Dimension plus Datums-Range.
 
 ---
 
@@ -607,7 +755,7 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
   - `welchTTest(samplesA, samplesB, { winsorize: 0.99 })` für RPV
   - `srmCheck(observedCounts, expectedWeights)` → Chi-Square p-value; Alarm bei p < 0.001
   - `sampleSize({ metric: "CR", baselineCR, mde, alpha: 0.05, power: 0.8 })`; für RPV `sampleSize({ metric: "RPV", mean, sd, mde })` (kontinuierlich; σ aus den letzten 30 Tagen Orders des Shops, RPV-Varianz ≈ CR·E[AOV²] − (CR·AOV)²), für AOV dasselbe auf Order-Basis. Zweitrangig: CR zuerst, RPV/AOV dürfen in WP5 nachziehen – aber vor WP7, weil vier der geplanten Tests RPV haben
-  - `evaluate(experiment, variantStats)` → pro Variante: `visitors, orders, cr, rpv, aov, lift, ci, pValue`, plus `srm`, plus `sampleSizeReached: boolean`. **`significant` ist nur `true`, wenn `sampleSizeReached && pValue < alpha`.** Regeln aus 4.8: CR auf konvertierende Visitors, Attribution-Fenster bis `endedAt`, Urteil nur Primärmetrik, Bonferroni bei mehr als zwei Varianten
+  - `evaluate(experiment, variantStats)` → pro Variante: `visitors, orders, cr, rpv, aov, lift, ci, pValue`, plus `srm`, plus `sampleSizeReached: boolean`. **`significant` ist nur `true`, wenn `sampleSizeReached && pValue < alpha`.** *(Stand WP4. `sampleSizeReached` wird in WP4.1 durch die Stopp-Regel aus ADR-0036 ersetzt; die Kopplung an `significant` bleibt wortgleich.)* Regeln aus 4.8: CR auf konvertierende Visitors, Attribution-Fenster bis `endedAt`, Urteil nur Primärmetrik, Bonferroni bei mehr als zwei Varianten
   - Der `evaluate()`-Output ist zugleich der `numbers`-Teil des Snapshots `ExperimentResult.snapshot` (§3): deshalb zusätzlich dieselben Kennzahlen je Device (`byDevice: { mobile, desktop, tablet }`), `window { from, to }`, `taintedDays`, `botShare`, und `lib/stats` exportiert eine `STATS_VERSION`-Konstante (semver, bei jeder Änderung an einer Testfunktion erhöhen). Einfrieren und Persistenz sind WP5.
 - `stats.server.ts`: **Live-Aggregation** aus `Exposure ⨝ OrderAttribution ⨝ Order ⨝ Refund` für laufende Experimente – eine Query, Indizes auf `(experimentId, variantId)`, `(orderId)`, `(experimentId, firstSeenAt)`; Zielzeit < 500 ms bei 1 Mio. Exposures. Revenue pro Visitor = Summe seiner attribuierten Orders minus Refunds; Order-Filter (`sourceName`, `isTest`, `cancelledAt`) und Attribution-Fenster exakt nach 4.8; `isBot`-Exposures ausgeschlossen. **Tainted Days:** Exposures, deren `firstSeenAt` (in `Shop.timezone`) auf einen Tag aus `Experiment.taintedDays` fällt, werden samt ihren Orders ausgeschlossen – der Visitor existiert für die Auswertung nicht.
 - `guardrail(variantStats)` in `lib/stats`: ab 500 Visitors pro Arm, wenn CR einer Variante < 50 % der Control → `warning: "possible breakage"`. Kein Auto-Stop, nur Hinweis.
@@ -624,27 +772,235 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
 **Session-Prompt (EN)**
 > Read CLAUDE.md and docs/plan.md 4.8 and WP4. Build lib/stats as pure TypeScript and apply the counting definitions in 4.8 exactly. Before writing any test statistic, write the reference tests first: reproduce at least three published worked examples (two-proportion z-test, Welch t-test, chi-square GOF) to 4 decimals. Then implement the functions, then the A/A Monte-Carlo test (10,000 runs, both CR and RPV) asserting a false-positive rate between 4% and 6%. If the FPR is outside that band, the implementation is wrong – fix it, do not widen the band. Document measured FPR in the package README. evaluate() must also return per-device numbers, the evaluation window, the tainted days it excluded and the bot share, because its output becomes the frozen ExperimentResult snapshot in WP5; export a STATS_VERSION constant. Exposures on tainted days (in the shop's timezone) are excluded together with their orders.
 
-### WP5 – Dashboard mit Editor + API + CLI (4–5 Tage)
+### WP4.1 – Visitor-Bindung der Orders, Segment-Dimensionen, Breakdown-Query (1–1,5 Tage)
 
-**Inhalt – Dashboard (Hauptweg), alles nach DESIGN.md, Englisch**
+Zwischen WP4 und WP5, weil WP5 die Device-Zahlen und die Zeitreihen anzeigt und beide heute nicht tragfähig sind.
+
+**Inhalt**
+- **Snippet**: `_ab_v` nach Vertrag 4.1b setzen – im selben `/cart/update.js`-Aufruf wie `_ab`
+  (`lib/snippet/src/cart.ts`) und als Hidden Input in jedem Add-to-Cart-Form. Kein zweiter Request, keine zweite
+  Bedingung. Bundle-Budget prüfen (8 KB gzip, aktuell 3.505 B).
+- **Device-Heuristik nachschärfen** (`lib/snippet/src/env.ts`): iPadOS meldet seit Version 13 standardmäßig einen
+  Desktop-Safari-UA. Zusätzliche Prüfung `/Macintosh/.test(ua) && navigator.maxTouchPoints > 1` → `tablet`.
+  Referenztests mit echten UA-Strings für iPhone, iPad (beide Modi), Android Phone, Android Tablet, Desktop.
+- **Ingest**: `_ab_v` aus `note_attributes`, sonst aus den Line-Item-Properties lesen, als UUID v4 validieren, nach
+  `OrderAttribution.visitorId` schreiben. Neues nullable Feld + Index, Migration. Kein Backfill (keine Bestandsdaten).
+- **Aggregation** (`app/services/stats.server.ts`): Wo `visitorId` vorhanden ist, joint die Query direkt auf
+  `Exposure` – Konverter = `COUNT(DISTINCT visitorId)`, RPV pro echtem Visitor, Fenster­untergrenze aus dem echten
+  `firstSeenAt`, Device aus `Exposure.device`. Der Identitäts-Pfad aus ADR-0032 bleibt als Fallback für Orders ohne
+  `_ab_v` erhalten, inklusive seiner Tests.
+- **`unknown` als vierter Device-Bucket** in `byDevice` (`lib/stats/types.ts`, `buildVariantStats`), damit sich die
+  Device-Zeilen auf die Gesamtwerte summieren. Bisher fehlt der Bucket in `byDevice`; der Fehlbetrag erscheint nur
+  experimentweit als `deviceLinkRate` / `ordersWithoutDevice`.
+- **New-Visitor-Flag** (Vertrag 4.5, geändert per ADR-0035): Snippet schickt `n`, Server persistiert
+  `Exposure.isNewVisitor` (nullable Boolean, Migration). `getVisitorId()` gibt dafür zurück, ob die ID aus
+  Cookie/localStorage kam oder gerade erzeugt wurde.
+- **Channel-Klassifikation** nach Vertrag 4.10 als pure Funktion in `lib/stats` (`classifyChannel(referrer, utm)`),
+  Host- und Medium-Listen als versionierte Konstanten. Tabellengetriebene Tests über alle zehn Gruppen, inklusive der
+  Reihenfolge-Fälle (Paid Social schlägt Organic Social, UTM schlägt Referrer).
+- **Generische Breakdown-Query** statt mehrerer spezieller:
+  `breakdown(experiment, dimension, opts)` mit `dimension ∈ { day, device, visitorType, channel }` und optionaler
+  Kombination `day × dimension` (für die Daily-Performance-Charts der Segment-Tabs). Tageszuordnung immer nach
+  Expositions-Tag in `Shop.timezone` (4.9). Ein Lasttest je Dimension, Ziel < 500 ms bei 1 Mio. Exposures wie die
+  Hauptaggregation; Indizes entsprechend ergänzen.
+
+  **Die drei Fallen aus WP4 gelten hier unverändert** – sie haben die Hauptaggregation von 528 s auf unter 400 ms
+  gebracht und die Tagesdimension ist genau der Ort, an dem sie wieder zuschlagen:
+  1. **Kein Lateral-Join gegen eine materialisierte CTE.** Die Exposure-Suche je Order direkt gegen `"Exposure"`,
+     damit `Exposure_customerId_idx` greift – gegen eine CTE mit 1 Mio. Zeilen wird daraus 30 k × Full Scan.
+  2. **Tage als UTC-Intervall, nie `to_char(...)`.** Der String-Vergleich je Zeile kostete ~130 ms und verhindert den
+     Index-Only-Scan. `app/services/timezone.ts` rechnet den lokalen Tag in sein UTC-Intervall um (DST getestet).
+     Grenzen immer über `utcTimestamp()` binden, sonst schickt Prisma `timestamptz` und die Session-Zeitzone
+     verschiebt das Ergebnis – lokal anders als auf Render.
+  3. **Nach dem Bulk-Load `VACUUM`**, bevor gemessen wird: der Index-Only-Scan braucht die Visibility Map, sonst ist
+     er langsamer als der Seq Scan (136 ms → 43 ms).
+- **Stopp-Regel statt `plannedSampleSize`** (ADR-0036): Migration auf `minConversionsPerArm` / `minDurationDays` /
+  `requireFullWeeks`. `evaluate()` ersetzt `sampleSizeReached: boolean` durch ein Objekt mit **Status je Bedingung**
+  (`met`, aktueller Wert, Zielwert, Enddatum) plus `met: boolean` insgesamt und `evaluableOn` – dem spätesten der
+  Enddaten, bei den Conversions aus dem bisherigen Tempo hochgerechnet. Wochengrenzen zählen ab `startedAt` in
+  `Shop.timezone`, nicht ab Montag. `significant = stoppingRuleMet && pValue < alphaAdjusted` bleibt wortgleich.
+  Futility-Warnung, wenn `evaluableOn` mehr als 6 Wochen nach `startedAt` liegt. Kein Auto-Stop.
+- **Sample-Size-Rechner beidseitig** in `lib/stats`: MDE → Conversions und Visitors, und Conversions → impliziter MDE
+  (`mde ≈ 2,8·√(2/C)`). Für **RPV getrennt und konservativ**: WP4 hat gemessen, dass das ausgegebene n auf
+  realistischem Umsatz nur **71,6 % statt 80 % Power** liefert (`lib/stats/README.md`, durch einen Test festgenagelt).
+  Der Aufschlag wird aus diesem Test abgeleitet, nicht geschätzt, und das UI weist den RPV-Wert als Untergrenze aus.
+- `STATS_VERSION` erhöhen (die CR-Definition **und** die Auswertbarkeits-Regel ändern sich), `lib/stats/README.md`
+  fortschreiben.
+
+**Abnahme**
+- Testbestellung als **Gast** im Dev Store: `_ab_v` steht im Admin unter „Additional details", `OrderAttribution.visitorId`
+  gefüllt, Order erscheint im Device-Bucket der Exposure – nicht in `unknown`.
+- Zwei Orders desselben Gast-Visitors → `converters` steigt um **1**, `orders` um 2. (Vor WP4.1 stieg `converters` um 2 –
+  genau die Verzerrung aus ADR-0032.)
+- Checkout über „Buy Now" ohne Cart-Kontakt: `_ab_v` kommt aus der Line-Item-Property.
+- Order ohne `_ab_v` → Fallback greift, Bucket `unknown`, Zahlen bleiben plausibel.
+- Summe über alle vier Device-Buckets = Gesamtwert, für Visitors, Conversions, Orders und Revenue.
+- `_ab_v` erscheint **nicht** in der Bestellbestätigungs-Mail und nicht in der Kundenansicht (private property prüfen).
+- Tages-Aggregation: Summe aller Tage = Gesamtwert des Experiments; ein tainted Tag fehlt in der Reihe.
+- `breakdown()` summiert sich für **jede** Dimension auf die Gesamtwerte aus `evaluate()` – Device, Visitor-Typ und
+  Channel einzeln geprüft, jeweils inklusive `unknown` bzw. `unassigned`.
+- Frischer Visitor im Dev Store → `isNewVisitor = true`; zweiter Besuch nach Reload → eine weitere Exposure in einem
+  anderen Experiment mit `false`; nach Löschen von Cookie **und** localStorage wieder `true`.
+- `classifyChannel` trifft alle zehn Gruppen; ein Aufruf ohne Referrer und ohne UTM ergibt `direct`.
+- Stopp-Regel: 1.000 Conversions bei 8 Tagen Laufzeit → `met: false`, Conversions-Bedingung `met: true`, `evaluableOn`
+  = Tag 14. Alle drei Bedingungen null → `significant` bleibt false. Start an einem Mittwoch → Wochengrenzen an Tag 7,
+  14, 21, nicht am Montag. Regel erfüllt und p < α → `significant: true`.
+- Rechner: `sampleSize({ metric: "CR", baselineCR: 0.03, mde: 0.125 })` und die Umkehrung aus 1.000 Conversions
+  ergeben denselben Wert auf ±2 %.
+
+**Session-Prompt (EN)**
+> Read CLAUDE.md, docs/plan.md contracts 4.1, 4.1b, 4.8, 4.9 and WP4.1, plus ADR-0032 and ADR-0033. Add the `_ab_v`
+> cart attribute to the snippet exactly as 4.1b specifies – same `/cart/update.js` call and same condition as `_ab`,
+> plus a hidden input in every add-to-cart form, no second request. Sharpen the device heuristic in
+> lib/snippet/src/env.ts for iPadOS (desktop UA + maxTouchPoints) with reference tests against real UA strings. Read
+> `_ab_v` at ingest, validate it as a UUID v4 and persist it to a new nullable `OrderAttribution.visitorId` (migration,
+> no backfill – the tool is not live). In stats.server.ts, join orders to exposures through that visitorId where it
+> exists: converters become COUNT(DISTINCT visitorId), RPV is per real visitor, the window lower bound is the real
+> firstSeenAt, and the device comes from Exposure.device. Keep the ADR-0032 identity path as the fallback for orders
+> without `_ab_v`, with its tests. Add `unknown` as a fourth, visible bucket in byDevice so the device rows sum to the
+> totals. Add the `n` field to the exposure payload per contract 4.5 as amended by ADR-0035 and persist it as
+> `Exposure.isNewVisitor`. Implement `classifyChannel(referrer, utm)` in lib/stats exactly per contract 4.10, with
+> table-driven tests over all ten groups including the precedence cases. Replace the per-day aggregation with one
+> generic `breakdown(experiment, dimension, opts)` covering day, device, visitorType and channel plus the day ×
+> dimension combination, exposure day in the shop timezone per 4.9, one load test per dimension, same < 500 ms target.
+> Replace `plannedSampleSize` with the three-condition stopping rule of ADR-0036 (minConversionsPerArm,
+> minDurationDays, requireFullWeeks). `evaluate()` returns a per-condition status plus an overall `met` and
+> `evaluableOn` – the latest of the three end dates, projecting the conversion pace – and full weeks count from
+> `startedAt` in the shop timezone, never from Monday. Keep `significant = stoppingRuleMet && pValue < alphaAdjusted`
+> unchanged and add a futility warning when `evaluableOn` is more than six weeks after `startedAt`; never auto-stop.
+> Make the sample-size calculator work both ways: MDE to conversions and visitors, and conversions to the implied MDE,
+> reported separately for RPV. Bump STATS_VERSION and update lib/stats/README.md. Verify the Shopify specifics
+> (private properties, order payload shape) with the Dev MCP, not from memory.
+
+### WP5 – Dashboard, Results, API + CLI (7–9 Tage, drei Sessions)
+
+Aufgeteilt, weil die Results-Seite mit fünf Tabs allein den Umfang einer Session hat: **5a** Dashboard-Grundgerüst und
+Editor · **5b** Results · **5c** API und CLI.
+
+#### 5a – Shops, Users, Experiments, Editor
+
 - **Shops**: Liste aller Shops (`ALLOWLISTED` / `PENDING` / `ACTIVE` / `UNINSTALLED`) mit laufenden Tests und letztem Reconciliation-Status; Domain allowlisten, `PENDING` freischalten (aus WP1 hierher verschoben und ordentlich gemacht)
 - **Users** (nur ADMIN): einladen per E-Mail mit Rolle; `CLIENT` bekommt Shop-Zuordnung. Die Client-Ansicht selbst ist Phase 2 – in Phase 1 landet ein `CLIENT` nach Login auf einer "Nothing here yet"-Seite
 - **Experiments** (pro Shop und global): Tabelle mit Status, Laufzeit, Sample-Size-Fortschritt, SRM-Badge; Filter/Sort/Pagination clientseitig wie in DESIGN.md
 - **Experiment erstellen / bearbeiten** – ein Formular:
-  - Basis: key (auto aus name, editierbar bis zum ersten Start), name, hypothesis, primaryMetric, plannedSampleSize (mit eingebautem Sample-Size-Rechner: baseline CR, MDE → Ergebnis)
+  - Basis: key (auto aus name, editierbar bis zum ersten Start), name, hypothesis, primaryMetric
+  - **Stopp-Regel** (ADR-0036): min. Conversions pro Arm (Default 1.000), min. Laufzeit in Tagen (Default 14), volle Wochen (Default an). Bei `RUNNING` nur verschärfbar (4.6)
+  - **Sample-Size-Rechner** daneben, beidseitig: MDE eingeben → Conversions und Visitors, oder Conversions eingeben → impliziter MDE ("1.000 conversions per arm ≈ detects a +12.5 % relative lift at 80 % power"). Für RPV getrennt ausgewiesen. Baseline-CR auf drei Wegen: (1) aus einem früheren Experiment desselben Shops, falls vorhanden – dann exakt und ohne Eingabe; (2) du trägst die Besucherzahl der letzten 30 Tage ein, die Orders holen wir selbst (`rpvPlanningInputs`); (3) manueller Override der Baseline-CR. AOV und dessen Streuung kommen immer aus unseren eigenen Orders
+  - **Laufzeit-Prognose** beim Anlegen: "at your current pace: ~5 weeks". Über 6 Wochen als Warnung, mit dem Hinweis, den MDE hochzusetzen. Beim ersten Test eines Shops fehlt das Tempo – dann bleibt das Feld leer statt zu raten
   - Targeting: URL-Regel (exact/contains/regex), Device-Checkboxen; Trigger (immediate / visible + selector); hideUntilApplied
   - Allocation, Varianten mit Weights
   - **Pro Variante: JS-Feld und CSS-Feld als CodeMirror-6-Editor** (Syntax-Highlighting, Zeilennummern, Dark/Light nach Theme), Control hat keine Felder
   - Unsaved-Bar, Save/Discard, Inline-Validierung (Weights = 1.0, key unique, Regex kompiliert)
   - Editing-Regel nach 4.6 inkl. Warnung bei `RUNNING`
   - QA-Bereich: Force-Links pro Variante zum Kopieren (`https://shop.de/products/…?ab_force=key:b`)
-- **Results**: Varianten-Tabelle aus `evaluate()` (visitors, orders, CR, RPV, AOV, lift, CI, p-value), SRM-Badge, Sample-Size-Fortschritt, Bot-Anteil, AuditLog-Marker, Guardrail-Warnung, Device-Split als aufklappbare Zeilen; **Zähler live** (Auto-Refresh 60 s, "updated n seconds ago"); **vor erreichter Sample Size steht "Not yet conclusive – n/N visitors" und keine p-values**; Start/Pause/Stop-Buttons mit Bestätigung; Stop verlangt `decision` und `conclusion` (§3)
-- **Stop = Einfrieren**: Der Stop-Dialog ruft in einer Transaktion `evaluate()`, schreibt `ExperimentResult` (§3: `numbers` + `frozen` + `verdict`, `statsVersion`, `frozenAt`) und setzt erst dann `ENDED`. Für `ENDED`-Experimente liest die Results-Seite **ausschließlich** den Snapshot (Hinweis "Frozen on <date>, stats v<x>"), nie mehr die Live-Query. Kein "Recompute"-Button.
-- **Tainted Days**: Feld am Experiment (Liste von Datumswerten, Datepicker, nur bei `RUNNING`/`PAUSED` editierbar, AuditLog `UPDATED`); Results zeigt "n days excluded: …" und die Sample-Size-Anzeige rechnet ohne diese Tage
-- **Reconciliation**: Tabelle der täglichen Läufe pro Shop (Daten ab WP6)
-- **Audit Log** pro Experiment
+- **Audit Log** pro Experiment · **Reconciliation**: Tabelle der täglichen Läufe pro Shop (Daten ab WP6)
+- **Glossar-Modul** (`app/lib/glossary.ts`): eine Definition pro Begriff, jeder Tooltip referenziert sie per Key. Kein
+  Tooltip-Text steht direkt im JSX – sonst driften dieselben Begriffe zwischen den Seiten auseinander. Tooltip-Rezept
+  aus DESIGN.md §506.
 
-**Inhalt – API + CLI (Zusatz)**
+#### 5b – Results-Seite (fünf Tabs)
+
+Gegenüber plan v4.1 nach dem Design-Review überarbeitet (**ADR-0037**). Bindend sind zusätzlich **DESIGN.md §10
+Content-Regeln** (so wenig Content wie möglich, laientauglich) und der Figma-Stand
+`Results / a-running-no-verdict / dark / lab-slate · v3`.
+
+**Persistenter Header über allen Tabs**: Name, Status-Badge, Primärmetrik, Startdatum und Laufzeit ("running for 12
+days, since 11.09.2026"), rechts **Edit** und die Aktionen. `Start` nur bei `DRAFT` und `PAUSED`; bei `RUNNING` nur
+`Pause` und `Stop`. **Kein** Experiment-Key (steht als Zeile „Key" im Setup), **keine** Shop-Domain (steht im
+Breadcrumb), keine Scope-Note, kein Filter-Hinweis, keine Filter (ADR-0034).
+
+Der **Stop-Dialog** verlangt `decision` (`WINNER` / `NO_DIFFERENCE` / `INVALID` / `ABORTED`) und `conclusion`
+(Freitext); ohne beides kein Stop. Ist die Stopp-Regel **noch nicht erfüllt**, warnt der Dialog deutlich – "6 days
+short of the stopping rule. Stopping now freezes the result without a verdict – permanently, there is no recompute." –
+blockiert aber nicht: Abbrechen muss immer möglich sein. Derselbe Dialog erklärt den Unterschied, den man sonst genau
+einmal falsch macht: **Pause** stoppt die Auslieferung und lässt das Ergebnis offen, **Stop** friert ein. Er ruft in
+einer Transaktion `evaluate()`, schreibt `ExperimentResult` (§3) und setzt erst dann `ENDED`. Für `ENDED` liest die
+ganze Seite **ausschließlich** den Snapshot ("Frozen on <date>, stats v<x>"), kein Recompute, kein Explore-Modus.
+
+**Tab 1 – Overview.** Der einzige Tab ohne Filter, weil hier das Urteil steht. Reihenfolge: Zahlen, dann Status, dann
+Kontext, dann Prüfungen.
+
+1. **Performance-Tabelle** – **eine** Gesamttabelle mit allen Goals, nicht nur der Primärmetrik:
+   Variant · Visitors · Orders · Conversions · Conv. rate ★ · Rev./visitor · AOV · Revenue.
+   - Primärmetrik über **Schriftgröße und leicht hinterlegte Spalte** hervorgehoben, nicht über Zusatztext
+   - **Lift klein unter dem Wert** ("+11,6 % vs A"), keine eigene Spalte. Vor erfüllter Stopp-Regel **neutral grau,
+     nie grün oder rot**
+   - **Keine CI-Spalte**, solange der Wert gesperrt ist; danach steht das CI klein unter dem Lift. Gesperrte Werte
+     bekommen nie eine eigene Spalte (§10)
+   - p-Wert nur für die Primärmetrik (4.8) und nur bei erfüllter Regel
+   - Horizontaler Scroll im **eigenen** Container, erste Spalte bleibt stehen. Die Seite scrollt nie horizontal
+   - **Dieselbe Komponente** wie die Tabellen der Segment-Tabs, nur mit anderer Zeilendimension
+2. **Verdict-Statuszeile** – schmal, direkt unter der Tabelle, solange die Stopp-Regel offen ist:
+   `Not yet conclusive (?) · ▓▓▓░░░░ · <Fortschritt> · est. 06.10.2026`, rechts „Winner & significance unlock at …".
+   - Der Fortschritt bezieht sich auf den **kleineren Arm**
+   - Planwerte (Baseline, MDE, α, Power) und Begründung im **Tooltip**, nicht sichtbar
+   - Nach erfüllter Regel wird daraus die volle Verdict-Karte *(noch nicht designt)*
+   - **Inhalt der Zeile richtet sich nach ADR-0036**, nicht nach einer Visitor-Zahl: Status der drei Bedingungen
+     (Conversions pro Arm · Mindestlaufzeit · volle Wochen) und `evaluableOn`. Der Figma-Stand zeigt hier noch
+     „40 % of 12.000 visitors per arm" – das ist die abgelöste `plannedSampleSize` und im Design nachzuziehen
+3. **Distribution** und **Hypothesis / Setup** nebeneinander:
+   - Donuts der Visitors je Device und je Channel. Im Device-Donut **keine `unknown`-Zeile** (Visitors sind nie
+     unknown, 4.10). Channel-Donut: **Top 4 plus „Other · n groups"**, vollständige Liste im Channels-Tab. Keine
+     Erklärzeilen. Sichtbar ist **Prozent oder absolute Zahl**, nicht beides – das andere im Hover
+   - Setup read-only: Key, Targeting, Trigger, Allocation, Weights, Salt, Varianten. Link in den Editor
+4. **Checks** und **History**:
+   - SRM-Badge, Bot-Anteil, Guardrail-Warnung, AuditLog-Marker für Edits an `RUNNING` (4.6)
+   - Der **Tainted-Days-Editor** (Datums-Chips, „+ Add day", nur bei `RUNNING`/`PAUSED`, AuditLog `UPDATED`) steckt
+     **in der Checks-Liste**, kein eigener Block
+   - History: Audit Log des Experiments
+   - **Keine Sparklines.** Außer den Donuts gibt es auf Overview keine Charts
+
+**Tab 2 – Goals.** Nur die **Charts**, keine eigene Variantentabelle – die steht auf Overview. Pro Goal (CR, RPV, AOV)
+eine aufklappbare Karte, die Primärmetrik mit Stern markiert und zuerst offen; darin die vier Serien nach Vertrag 4.9
+mit Umschalter **Daily / Cumulative**. Filterleiste: Datums-Range (Explore, ADR-0034).
+
+**Tabs 3–5 – Devices · Visitors · Channels.** Alle drei identisch aufgebaut, Dimensionen nach Vertrag 4.10.
+- **Distribution**: Donut der Visitors über die Werte der Dimension
+- **Daily performance**: Liniendiagramm, eine Linie pro Variante, Metrik über Dropdown, Daily/Cumulative wie in 4.9,
+  plus Umschalter über die Segmentwerte
+- **Performance-Tabelle**: pro Segmentwert zwei Zeilen (Variante und Original), dieselbe Komponente wie auf Overview.
+  Die Segmentzeilen summieren sich auf die Gesamtwerte, inklusive `unknown` bzw. `unassigned`
+- **Kein p-value, kein CI, kein Winner** (ADR-0034). Improvement erst ab **100 Visitors und 25 Conversions pro Arm**,
+  darunter ein Strich
+- Filterleiste: Datums-Range und die **eigene** Dimension. Keine Cross-Filter (4.10)
+- Unter der Channels-Tabelle steht der **sichtbare** Pflichthinweis zur Abweichung von Shopify Analytics (4.10). Das
+  ist die eine Ausnahme von „keine Fußnoten" – §10 sieht sie ausdrücklich vor: ein Vertrag schlägt eine Content-Regel
+
+**Querschnitt.**
+- **Laden ohne Polling** (§10): beim Öffnen laden, bei Rückkehr in den Tab neu laden, **Refresh-Button mit
+  „Updated n s ago"**. Kein Auto-Refresh
+- Solange ein Filter aktiv ist, sind p-Wert, CI, `significant`, Winner, Stopp-Regel-Fortschritt und SRM-Badge
+  **ausgeblendet** mit dem Hinweis „Exploratory view – no verdict" (ADR-0034)
+- Jede Tabelle und jedes Chart hat einen Leerzustand („No data yet") und einen Zu-wenig-Zustand („too few")
+  *(noch nicht designt)*
+- **Tooltips nur nach DESIGN.md §10**, einer pro Begriff an der ersten Stelle, Texte aus dem Glossar-Modul (5a).
+  **Ja**: Not yet conclusive / Stopp-Regel · SRM · Guardrail · Tainted days · Key · Salt · Visitor type · Channel ·
+  Conversions vs. Orders · Daily vs. Cumulative · „Exploratory view – no verdict". **Nein**: Spaltenköpfe, Primary
+  metric, Device-Werte, Bot traffic, Code edits, Legendenzeilen. Die **AOV-Warnung aus 4.8** bleibt, wenn AOV die
+  Primärmetrik ist – die verlangt der Vertrag
+- **Keine Fußnoten und Erklärzeilen** unter Tabellen und Charts; Inhalt gehört in Tooltips. Ausnahme wie oben
+- Charts und Segment-Tabellen werden **deferred** per `useFetcher` aus Resource-Routes geladen, Skeleton statt leerer
+  Fläche
+- DESIGN.md-Bausteine werden **über ihre Abschnittsnamen** referenziert, nie über Zeilennummern: Segmented Tabs ·
+  DateRange-/Dropdown-Trigger · Tooltip · Accordion/Chevron · Chart-Tooltip und Legende · Content-Regeln (§10)
+
+**Vor 5b zu klären** (Stand 27.09., ADR-0037 ist die Historie):
+- ~~Designsystem~~ **entschieden**: Der Lab-Look steckt seit 27.09. in den Theme-Tokens von DESIGN.md §2
+  (Slate-Flächen, Emerald als einziger Akzent, invertierter Primary, Geist). DESIGN.md gilt damit unverändert;
+  `slate-*`/`emerald-*` bleiben nach §9 aus den Klassennamen heraus, die Werte stecken nur im Theme
+- ~~Tabs-Variante~~ **entschieden**: Underline-Tabs, Rezept steht in DESIGN.md §7 und nennt die Results-Tabs
+  ausdrücklich. Zähler neutral grau, nie farbig
+- **Offen – fehlende DESIGN.md-Rezepte**: **Donut** (§1 erlaubt ihn, ein Rezept fehlt) und ein **gestyltes
+  Tooltip-Popover**; der bestehende Eintrag setzt auf das native `title`, das sich nicht stylen lässt, verzögert
+  erscheint und auf Touch nicht funktioniert. Die Results-Seite trägt nach §10 rund zehn Tooltips aus dem Glossar –
+  ohne Popover nicht umsetzbar. Beide gehören nach DESIGN.md, **bevor** 5b gebaut wird
+- **Offen – noch nicht designt**: volle Verdict-Karte nach erfüllter Stopp-Regel, Leer- und „too few"-Zustände
+- **Offen – Widerspruch im Entwurf**: Die Statuszeile zeigt „40 % of 12.000 visitors per arm", also die abgelöste
+  visitor-basierte `plannedSampleSize`. Sie muss den Status der drei Bedingungen aus ADR-0036 plus `evaluableOn`
+  zeigen. Hier zieht das Design nach, nicht die Regel
+
+#### 5c – API + CLI
+
 - JSON-API mit Bearer-Token (pro User im Dashboard erzeugt, nur Hash gespeichert, max. 90 Tage): `GET/PUT /api/shops/:shop/experiments/:key`, `POST …/status`, `GET …/results`. Dieselbe API nutzt später der MCP Server.
 - `lib/cli` (`sh-ab`): `init`, `push [--force]`, `start`, `pause`, `stop`, `status`, `results`; Konfig in `.sh-abrc`
 
@@ -652,18 +1008,34 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
 - Kompletter Workflow nur im UI: Experiment anlegen → CSS in B eintippen → Save → Start → Dev Store zeigt Variante → nach Besuchen zeigt Results Visitors > 0 → Testbestellung → Orders und Revenue korrekt
 - Edit an `RUNNING`: Warnung erscheint, AuditLog-Eintrag, Metafield sofort aktualisiert, Marker im Report
 - Targeting-Felder bei `RUNNING` disabled
-- Results ohne erreichte Sample Size zeigen keine p-values; Sekundärmetriken nie
+- Results mit unerfüllter Stopp-Regel zeigen keine p-values; Sekundärmetriken nie
+- Die Verdict-Statuszeile zeigt den Status aller drei Bedingungen plus `Evaluable on`; 1.000 Conversions nach 8 Tagen → Conversions abgehakt, Datum steht auf Tag 14. Der Fortschritt bezieht sich auf den kleineren Arm
+- Overview trägt **eine** Gesamttabelle mit allen Goals; der Goals-Tab hat nur Charts. Beide Tabellen (Overview und Segment-Tabs) sind dieselbe Komponente
+- Vor erfüllter Stopp-Regel: keine CI-Spalte, Lifts neutral grau, Verdict als schmale Zeile unter der Tabelle
+- Device-Donut auf Overview hat keine `unknown`-Zeile; die Devices-Tabelle hat sie
+- Keine Fußnote unter irgendeiner Tabelle außer dem Pflichthinweis unter der Channels-Tabelle (4.10)
+- Stopp-Regel bei `RUNNING` lockern ist nicht möglich, verschärfen schon; beides im AuditLog
+- Stop-Dialog bei unerfüllter Regel warnt und lässt trotzdem `ABORTED` zu; die Pause/Stop-Unterscheidung steht im Dialog
+- Header mit Start/Pause/Stop ist auf **allen fünf Tabs** sichtbar und funktionsfähig
+- Pro Goal vier Charts nach 4.9, Daily und Cumulative; kumulativer Endpunkt trifft exakt die Zahl der Tabelle darüber
+- Jede Segment-Tabelle summiert sich auf die Gesamtwerte – Device (inkl. `unknown`), Visitor-Typ, Channel (inkl. `unassigned`)
+- Segmentzeile unter der Schwelle zeigt einen Strich statt eines Improvement-Werts
+- Segment-Tabs zeigen nirgends p-value, CI oder Winner
+- Explore-Modus: Datums-Range oder Segment-Filter aktiv → p-Wert, CI, Winner, Sample-Size-Fortschritt und SRM-Badge verschwinden, Hinweis sichtbar; Filter zurücksetzen → alles wieder da. Bei `ENDED` ist der Explore-Modus aus
+- Jeder Tooltip-Text kommt aus dem Glossar-Modul; kein Tooltip-String steht im JSX
 - Stop ohne `decision` ist nicht möglich
 - Stop erzeugt genau eine `ExperimentResult`-Row; danach eine Testbestellung mit Attribut → Results unverändert (Snapshot), Live-Query wird nicht mehr aufgerufen
 - Tag als tainted markieren → Visitors/Orders in Results sinken um die Exposures dieses Tages, Hinweis sichtbar
-- Testbestellung im Dev Store erscheint innerhalb von 60 s in Results, ohne Cron
+- Testbestellung im Dev Store erscheint in Results **nach Refresh oder Tab-Fokus**, ohne Cron; es gibt **kein** Polling
 - Derselbe Workflow per CLI funktioniert ebenfalls
 - Dark- und Light-Theme, Mobile-Breite ohne horizontales Scrollen, keine Verstöße gegen DESIGN.md §9
 
-**Session-Prompts (EN)** – zwei Sessions empfohlen:
-> **5a** Read CLAUDE.md, docs/plan.md (4.6, WP5) and docs/DESIGN.md in full. Build the dashboard pages Shops, Experiments list, Experiment create/edit and Results using only the components and recipes from DESIGN.md (no other UI libraries; CodeMirror 6 is the single allowed exception, for the JS and CSS fields). Implement the editing rule from contract 4.6 including the running-experiment warning, AuditLog entries and the report marker. Include the sample-size calculator in the form. The Results page must never show p-values or a winner before plannedSampleSize is reached. Stopping an experiment must freeze an ExperimentResult snapshot (section 3) in the same transaction that sets ENDED; ended experiments render from the snapshot only. Add the tainted-days editor (list of dates) and show excluded days in Results. All UI text in English.
+**Session-Prompts (EN)** – drei Sessions:
+> **5a** Read CLAUDE.md, docs/plan.md (4.6, WP5a) and docs/DESIGN.md in full. Build the dashboard pages Shops, Users, Experiments list and Experiment create/edit using only the components and recipes from DESIGN.md (no other UI libraries; CodeMirror 6 is the single allowed exception, for the JS and CSS fields). Implement the editing rule from contract 4.6 including the running-experiment warning, AuditLog entries and the report marker. Include the sample-size calculator in the form. Add the glossary module: one definition per term, every tooltip referencing it by key, no tooltip string inline in JSX. All UI text in English.
 
-> **5b** Read docs/plan.md 4.7 and WP5. Implement the bearer-token JSON API (tokens generated per user in the dashboard, stored as hashes, expiring after 90 days, shop-scoped routes) and the sh-ab CLI in lib/cli. The CLI must use exactly the same service layer as the dashboard – no duplicated business logic. `push` on a RUNNING experiment requires `--force` and produces the same AuditLog entry as a UI edit.
+> **5b** Read CLAUDE.md, docs/plan.md contracts 4.8, 4.9, 4.10 and WP5b, docs/DESIGN.md in full – especially §10 Content rules – and ADR-0025, ADR-0026, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037. Build the Results page as five tabs (Overview, Goals, Devices, Visitors, Channels) with a persistent header carrying the status, runtime and the Start/Pause/Stop actions on every tab. Overview holds the verdict and has no filters at all. The Goals tab has one collapsible card per goal with the four charts of contract 4.9 and a daily/cumulative toggle; p-values appear only on the primary metric and only once the stopping rule of ADR-0036 is met. Render the stopping rule per ADR-0037 as a narrow status line under the performance table – not a card – carrying the status of all three conditions and the projected `Evaluable on` date, with the planning values in a tooltip and progress measured on the smaller arm. Overview carries one full table across all goals; the Goals tab has charts only. Before the rule is met there is no CI column at all and lifts stay neutral grey. Do not poll: load on open, reload on tab focus, refresh button with "Updated n s ago". Make the stop dialog warn – without blocking – when the rule is not met yet, explaining that Pause stops serving while Stop freezes the result for good. Devices, Visitors and Channels are identical in structure per contract 4.10 – donut, daily performance chart, performance table – and never show a p-value, CI or winner; the improvement badge appears only from 100 visitors and 25 conversions per arm. Implement the explore mode exactly as ADR-0034 requires. Stopping freezes an ExperimentResult snapshot in the same transaction that sets ENDED, and ended experiments render from the snapshot only. Charts and segment tables load deferred through resource routes. Every explained term uses the glossary module from 5a. All UI text in English.
+
+> **5c** Read docs/plan.md 4.7 and WP5c. Implement the bearer-token JSON API (tokens generated per user in the dashboard, stored as hashes, expiring after 90 days, shop-scoped routes) and the sh-ab CLI in lib/cli. The CLI must use exactly the same service layer as the dashboard – no duplicated business logic. `push` on a RUNNING experiment requires `--force` and produces the same AuditLog entry as a UI edit.
 
 ### WP6 – Reconciliation, Alerts, Bot-Filter (1–2 Tage)
 
@@ -689,7 +1061,7 @@ Der Review ist der längste externe Pfad: Shopify nennt Tage, real sind es oft z
 - Voraussetzung: AVV mit dem Kunden unterschrieben; Consent-Tool des Kunden geprüft (bedient es `Shopify.customerPrivacy`?), `requireConsent` entsprechend gesetzt
 - Ab hier: lokale Entwicklung nur noch gegen eine eigene Dev-DB, nie gegen Prod
 - Install auf einem A+-Kunden mit gutem Traffic (Tierliebhaber oder Wunderwunsch), App Embed aktivieren, Snippet-Ladeverhalten und Lighthouse prüfen
-- Experiment `aa-baseline`: zwei Varianten ohne Code, 50/50, Allocation 1.0, `plannedSampleSize` aus dem Rechner
+- Experiment `aa-baseline`: zwei Varianten ohne Code, 50/50, Allocation 1.0, Stopp-Regel aus dem Rechner (ADR-0036)
 - Täglich: Reconciliation `OK`, SRM p > 0.001, Bot-Anteil plausibel
 - Nach 14 Tagen: **SRM bestanden, kein signifikanter Unterschied bei CR und RPV, jeder `MISMATCH` hat eine gefundene Ursache, kumulierte Revenue-Abweichung ≤ 0,5 %**
 - Fällt ein Kriterium durch: Ursache finden, fixen, A/A neu starten. Kein Phase-2-Feature vorher.
@@ -742,8 +1114,12 @@ pnpm deploy         # shopify app deploy (extensions) – ask before running
 - visitorId is always the cookie. customer.id is metadata for linking, never a bucketing input.
 - Every function in lib/stats has a reference test against a published worked example before it is used.
   The A/A Monte-Carlo test (FPR 4–6%) must stay green. Never widen the band to make it pass.
-- The dashboard never shows p-values or a winner before plannedSampleSize is reached. Counts and revenue are live
-  (query, not DailyStat); only the verdict waits.
+- The dashboard never shows p-values or a winner before the stopping rule of ADR-0036 is met: at least
+  `minConversionsPerArm` converting visitors per arm (default 1,000), at least `minDurationDays` days (default 14),
+  and only on a full-week boundary counted from `startedAt` in the shop timezone – never from Monday. Counts and
+  revenue are live (query, not DailyStat); only the verdict waits. `significant = stoppingRuleMet && p < alpha` is not
+  negotiable, and the rule may only be tightened while RUNNING (contract 4.6) – loosening it would unlock a p-value.
+  The tool never stops a test by itself; a failing futility projection is a warning, nothing more.
 - Editing a RUNNING experiment follows contract 4.6: code fields allowed with warning + AuditLog + report marker;
   targeting, allocation, weights and salt are locked.
 - Snippet budget: 8 KB gzip. Snippet errors must never break the merchant's page – every variant runs in try/catch,

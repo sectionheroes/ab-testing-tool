@@ -24,6 +24,14 @@ export type SampleSizeInput =
 export type SampleSizeResult = {
   /** Required observations per variant – visitors for CR and RPV, orders for AOV (contract 4.8: AOV is order-based). */
   perVariant: number;
+  /**
+   * For RPV and AOV: `perVariant` with the measured surcharge of `rpvSurcharge()` applied – the number to plan with.
+   * `perVariant` alone is a floor, not a promise (see below and lib/stats/README.md). Equal to `perVariant` for CR,
+   * where the formula holds.
+   */
+  perVariantConservative: number;
+  /** The factor between the two. 1 for CR. */
+  surcharge: number;
   /** perVariant × number of arms, for the two-arm default. */
   total: number;
   metric: "CR" | "RPV" | "AOV";
@@ -73,7 +81,19 @@ export function sampleSize(input: SampleSizeInput, arms = 2): SampleSizeResult {
     const pBar = (p1 + p2) / 2;
     const n = (zAlpha * Math.sqrt(2 * pBar * (1 - pBar)) + zPower * Math.sqrt(p1 * (1 - p1) + p2 * (1 - p2))) ** 2 / delta ** 2;
     const perVariant = Math.ceil(n);
-    return { perVariant, total: perVariant * arms, metric: "CR", unit: "visitors", alpha, power, baseline: p1, target: p2, absoluteEffect: delta };
+    return {
+      perVariant,
+      perVariantConservative: perVariant,
+      surcharge: 1,
+      total: perVariant * arms,
+      metric: "CR",
+      unit: "visitors",
+      alpha,
+      power,
+      baseline: p1,
+      target: p2,
+      absoluteEffect: delta,
+    };
   }
 
   const { mean, sd } = input;
@@ -82,8 +102,11 @@ export function sampleSize(input: SampleSizeInput, arms = 2): SampleSizeResult {
   if (delta === 0) throw new Error("sampleSize: mde must not be 0");
   const n = (2 * (zAlpha + zPower) ** 2 * sd ** 2) / delta ** 2;
   const perVariant = Math.ceil(n);
+  const surcharge = rpvSurcharge(power);
   return {
     perVariant,
+    perVariantConservative: Math.ceil(perVariant * surcharge),
+    surcharge,
     total: perVariant * arms,
     metric: input.metric,
     unit: input.metric === "AOV" ? "orders" : "visitors",
@@ -119,4 +142,35 @@ export function rpvMomentsFromOrders(cr: number, orderAmounts: number[]): { mean
   const secondMoment = sumSq / orderAmounts.length;
   const variance = cr * secondMoment - (cr * aov) ** 2;
   return { mean: cr * aov, sd: Math.sqrt(Math.max(variance, 0)), aov };
+}
+
+/**
+ * The power the RPV/AOV formula above actually delivers at the n it returns, **measured**, not assumed: 71.6 % instead
+ * of the 80 % it promises, on zero-inflated lognormal revenue (CR 3 %, μ = 4.2, σ = 0.7). Measured in WP4 and pinned
+ * by `test/coverage.test.ts`, which asserts this exact constant – if the implementation drifts, that test fails rather
+ * than the surcharge silently going wrong.
+ *
+ * Two reasons, both inherent to the formula plan WP4 specifies: it assumes the same σ in both arms (a real RPV lift is
+ * a bigger basket, so the variant's variance grows with the effect), and `Var(RPV) ≈ CR·E[AOV²] − (CR·AOV)²` allows a
+ * visitor at most one order, which understates the variance (ADR-0036).
+ */
+export const RPV_POWER_AT_PLANNED_N = 0.716;
+
+/**
+ * How much to add to the RPV/AOV sample size so it delivers the power it was asked for. **Derived** from
+ * `RPV_POWER_AT_PLANNED_N`, not estimated (ADR-0036 explicitly retires the earlier guessed "20–25 %"):
+ *
+ * For a two-sample mean test, power = Φ(√(n/2)·Δ/σ − z_{1−α/2}), so √(n/2)·Δ/σ = z_{1−α/2} + z_power. The measured
+ * power fixes the left-hand side at the n the planner returned; asking for the target power instead scales n by
+ *
+ *   n₁/n₀ = ( (z_{1−α/2} + z_target) / (z_{1−α/2} + z_measured) )²
+ *
+ * At α = 0.05, measured 71.6 % and target 80 % that is **1.226** – round up by about 23 %.
+ */
+export function rpvSurcharge(targetPower = 0.8, alpha = 0.05, measuredPower = RPV_POWER_AT_PLANNED_N): number {
+  if (!(targetPower > 0 && targetPower < 1)) throw new Error(`rpvSurcharge: targetPower must be in (0, 1), got ${targetPower}`);
+  if (!(measuredPower > 0 && measuredPower < 1)) throw new Error(`rpvSurcharge: measuredPower must be in (0, 1), got ${measuredPower}`);
+  if (measuredPower >= targetPower) return 1;
+  const zAlpha = normalQuantile(1 - alpha / 2);
+  return ((zAlpha + normalQuantile(targetPower)) / (zAlpha + normalQuantile(measuredPower))) ** 2;
 }
