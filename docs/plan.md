@@ -111,10 +111,10 @@ sh-ab/
 │   │   ├── login.tsx             # Google OAuth (Start + Callback)
 │   │   └── dashboard.*.tsx       # DAS PRODUKT: Shops, Experiments, Editor, Results, Reconciliation
 │   ├── services/
-│   │   ├── attribution.server.ts # note_attributes / line_items → Zuordnung
+│   │   ├── attribution.server.ts # note_attributes / line_items → Zuordnung (`_ab` 4.1 und `_ab_v` 4.1b)
 │   │   ├── metafields.server.ts  # Config-Writer
 │   │   ├── reconciliation.server.ts
-│   │   ├── stats.server.ts       # Aggregation-Queries, ruft lib/stats
+│   │   ├── stats.server.ts       # Aggregation-Queries + breakdown() (4.9/4.10), ruft lib/stats
 │   │   └── auth.server.ts        # Google OAuth, Session-Cookie, Allowlist, Rollen + Shop-Scoping
 │   └── db.server.ts              # Prisma Client
 ├── extensions/
@@ -123,7 +123,9 @@ sh-ab/
 │       └── assets/shab.js        # gebautes Snippet (aus lib/snippet)
 ├── lib/
 │   ├── snippet/                  # Client-Script, TypeScript, esbuild → extensions/.../shab.js
-│   ├── stats/                    # Stats-Engine, pure functions, keine DB
+│   ├── stats/                    # Stats-Engine, pure functions, keine DB; enthält auch timezone.ts (Kalendertage,
+│   │                             #   Tagesintervalle) – evaluate() braucht sie für die Stopp-Regel und lib/ darf nicht
+│   │                             #   aus app/ importieren; app/services/timezone.ts re-exportiert nur noch
 │   └── cli/                      # sh-ab CLI (Zusatz)
 ├── prisma/
 │   ├── schema.prisma
@@ -233,6 +235,7 @@ model Exposure {                          // Retention: 12 Monate, dann löscht 
   customerId    String?                   // Shopify customer id – per Login-Link (4.5) gesetzt, nie Bucketing-Input
   firstSeenAt   DateTime
   device        String                    // mobile | desktop | tablet
+  isNewVisitor  Boolean?                  // Vertrag 4.5 Feld `n` (ADR-0035): beim Page Load lag keine gültige _shab_vid vor. null = altes Snippet → Segment `unknown` (4.10)
   country       String?
   referrer      String?
   utm           Json?
@@ -279,8 +282,10 @@ model OrderAttribution {
   orderId       String
   experimentId  String
   variantId     String
+  visitorId     String?                   // Vertrag 4.1b: das `_ab_v` der Order, beim Ingest als UUID v4 validiert (ADR-0033). null → Fallback ADR-0032, Device-Bucket `unknown`
   source        AttributionSource         // CART_ATTRIBUTE | LINE_ITEM_PROPERTY | CUSTOMER_LOOKUP
   @@id([orderId, experimentId])
+  @@index([visitorId])
 }
 
 model Refund {

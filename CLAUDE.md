@@ -24,7 +24,8 @@ pnpm test:db        # database-backed suite against the local Postgres; every ca
 pnpm build:snippet  # lib/snippet → extensions/sh-ab-embed/assets/shab.js, prints raw + gzip, fails above 8 KB gzip; then deploy --config dev
 pnpm db:migrate     # prisma migrate dev against the local Postgres (.env = postgresql://<user>@localhost:5432/sh_ab_dev)
 pnpm seed:admin <email>   # upsert a dashboard ADMIN (script, not a migration)
-pnpm seed:load [exposures] [orders]   # synthetic load fixture on the LOCAL db (default 1M/30k); prints the aggregation timings
+pnpm seed:load [exposures] [orders]   # synthetic load fixture on the LOCAL db (default 1M/30k); prints the aggregation and breakdown timings
+pnpm measure:load [experimentId]      # re-measures an EXISTING fixture without seeding – for iterating on a query
 pnpm sync:config <shop>   # reserve `server` + rebuild/write the `client` metafield from RUNNING experiments
 pnpm experiment:status <shop> <key> <RUNNING|PAUSED|ENDED> [decision]   # status change via the service layer (writes the metafield)
 pnpm variant:code <shop> <key> <variant> --js <file> --css <file>       # code save via the service layer (hotfix on RUNNING)
@@ -63,6 +64,18 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
 - Raw SQL against a DateTime column binds its bounds through `utcTimestamp()` (app/services/stats.server.ts). A plain
   `${date}` parameter is sent as `timestamptz` and gets reinterpreted in the session timezone, which differs between a
   dev machine and Render – it looks right locally and is wrong in production.
+- Measure before and after every query change, with `pnpm measure:load`, and read the EXPLAIN rather than guessing.
+  Four traps, all of them measured, all of them cost an order of magnitude (WP4 and WP4.1):
+  1. **No lateral join against a materialised CTE.** Query `"Exposure"` directly so its indexes are used.
+  2. **A day is a UTC interval, never `to_char(...)` and never a `::date` group key on a big scan.** For a dimension
+     the covering index serves, join against a small `VALUES` list of day intervals – a computed key cannot be read in
+     index order, so Postgres sorts a million rows and spills to disk. For a dimension that has to visit the heap
+     anyway (channel, which needs `referrer` and `utm`), the interval join is *wrong*: 30 range scans mean 30× random
+     heap access. There the per-row date plus a hash aggregate wins, by 1.404 ms against 206 ms.
+  3. **`VACUUM` twice after a bulk load, before measuring.** Index-only scans need the visibility map, and the first
+     pass leaves pages that are not yet all-visible (measured: 27.162 heap fetches after one pass, 31 after two).
+  4. **Do not pin the planner by accident.** A `LATERAL … LIMIT 1` against a UNIQUE index is a plain `LEFT JOIN` with
+     extra steps, and the `LIMIT` forces a nested loop the planner would otherwise not choose.
 - The dashboard never shows p-values or a winner before the stopping rule of ADR-0036 is met: at least
   `minConversionsPerArm` converting visitors per arm (default 1,000), at least `minDurationDays` days (default 14),
   and only on a full-week boundary counted from `startedAt` in the shop timezone – never from Monday. Counts and
