@@ -122,6 +122,10 @@ sets the default; never `shopify app config use prod` on a dev machine, always p
 - ADRs in docs/adr/, one file per decision, format in docs/adr/0000-template.md (Kontext, Entscheidung, Alternativen,
   Konsequenzen, Datum). Never edit an ADR; supersede it. plan.md §1 is the current state, ADRs are the history.
 - End every session by overwriting docs/STATUS.md (never append). Half a page max.
+- Every structural or functional decision made in a design session (Figma) goes into docs/STATUS.md the same session,
+  under "Design-Entscheidungen": what changed in the layout, what changed in behaviour, and which part of plan.md or
+  which ADR it deviates from. The developer and the sparring partner read STATUS.md, not Figma – a decision that only
+  lives in Figma makes design and plan drift apart. If it changes plan content, also flag it as open for plan.md/ADR.
 
 ## Do not
 - Write metafields or install the app on any store other than the dev store without explicit approval.
