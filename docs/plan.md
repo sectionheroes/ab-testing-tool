@@ -1199,4 +1199,40 @@ WP1 setzt (1) `connection_limit=10&pool_timeout=5` in der Prisma-URL und (2) lie
 
 **Phase 2 – Nutzbar machen:** Targeting `utm`/`country`/`referrer`/`customerStatus` · Redirect-Experimente (`type: REDIRECT`, Template-Tests via `?view=`) · Sequential Testing (mSPRT) · Bootstrap-CI für RPV · Charts im Dashboard (handgeschriebene SVGs nach DESIGN.md) · MCP Server auf der bestehenden API · Learnings-Datenbank über alle Kunden · Mutual Exclusion zwischen Experimenten · Client-Ansicht im Dashboard (Rolle `CLIENT`, read-only Results der eigenen Shops, Einladung per Mail) · Cross-Device für eingeloggte Kunden über Customer-Metafield (aus Phase 3 vorgezogen) · Screenshot je Variante im `ExperimentResult`-Snapshot (Pflicht beim Stop, `rahmen.md` 3.2) · automatische Tainted-Day-Erkennung (Ingestion-Lücke > 30 min oder Verlust > 2 % → Tag automatisch in `taintedDays`, `rahmen.md` 7.2)
 
+**Phase 2 – Custom Goals (Joel, 01.10.2026 – Umfang festgelegt, nicht Teil von Phase 1):** Heute kennt das Tool nur
+order-basierte Metriken (`Metric = CR | RPV | AOV`, Vertrag 4.8). Geplant:
+
+- **Vier Goal-Typen:** Klick auf ein Element (CSS-Selektor) · Seitenaufruf (URL-Regel, derselbe Matcher wie das
+  Targeting) · Shopify-Event · eigenes JS-Event (`window.shab.goal("name")`).
+- **Goals leben pro Shop und sind wiederverwendbar** – eigene Tabelle, Experimente referenzieren sie, statt sie je
+  Experiment neu zu definieren.
+- **Ein Custom Goal darf Primärmetrik sein**, also das Urteil bestimmen.
+
+Technisch weitgehend additiv: neue Proxy-Route `/proxy/ev` neben `/proxy/e` (Signaturprüfung, Bot-Filter und Drosseln
+existieren), neue Tabelle `GoalEvent` mit demselben Unique-Constraint wie `Exposure` (eine Zeile je Visitor, Experiment
+und Goal) – damit ist jedes Custom Goal binomial und `twoProportionZTest` gilt unverändert; `evaluate()` braucht nur
+einen Goal-Typ, keine neue Mathematik. Vertrag 4.8 bleibt unangetastet, die Definition kommt als eigener Vertrag
+daneben. Snippet-Kosten geschätzt 200–400 B gzip (Budget nach WP4.1 bei 45 %).
+
+Vier Konsequenzen, die beim Bauen nicht vergessen werden dürfen:
+
+1. **Revenue als Pflicht-Guardrail, wenn die Primärmetrik ein Custom Goal ist.** Ein Klick ist ein Proxy. „Gewinnt auf
+   Klicks, verliert auf Umsatz" ist der klassische CRO-Fehler; `guardrail()` in `lib/stats` existiert bereits.
+2. **Wiederverwendbare Goals müssen in den `ExperimentResult`-Snapshot eingefroren werden** (ADR-0025), sonst ändert
+   das Bearbeiten eines Goals rückwirkend die Bedeutung alter Ergebnisse.
+3. **Die Stopp-Regel braucht Defaults je Goal-Typ.** Die 1.000 Conversions aus ADR-0036 sind für Käufe kalibriert;
+   Klicks passieren um Größenordnungen häufiger, dieselbe Zahl wäre dort ein deutlich schwächerer Test. Dasselbe gilt
+   für die Last: ein Klick-Goal auf einem häufigen Element erzeugt ein Vielfaches der Exposure-Requests.
+4. **Selektor-Validierung im Editor ist Pflicht, keine Kür.** Ein gebrochener Selektor zählt still null – der Test
+   läuft wochenlang und misst nichts. Der Editor muss den Selektor gegen die echte Storefront prüfen und die Zahl der
+   Treffer zeigen.
+
+**Offen zu prüfen:** Der Typ *Shopify-Event*. Die Standard-Events (`product_added_to_cart`, `checkout_started` …)
+gehören zur Web-Pixel-API, und Web Pixels setzen wir bewusst nicht ein (ADR-0012, Sandbox). Ob und wie sich diese
+Events aus dem Theme-Kontext abgreifen lassen, ist per Dev MCP zu klären, bevor der Typ zugesagt wird.
+
+**Fast umsonst und vorzuziehen:** Ein Goal **„reached checkout"** über das Webhook `checkouts/create` – serverseitig,
+ohne Selektor, kann durch kein Theme-Update brechen, gleiches Attributionsmodell wie Orders. Das deckt den
+Funnel-Schritt ab, der in den meisten Fällen gemeint ist, wenn jemand „Custom Goal" sagt.
+
 **Phase 3 – Preis- und Versandtests:** Shopify Functions als Extensions im selben Repo (Delivery Customization, Discount, Cart Transform – Preisänderung in beide Richtungen vorher gegen die Doku prüfen) · Functions lesen `cart.attribute("_ab")` und `$app:sh_ab.server` · `unitCost` aus `inventory_item.cost` für Profit-Metrik · Rechtliche Freigabe (PAngV § 11, UWG) vor dem ersten Live-Test

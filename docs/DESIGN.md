@@ -13,16 +13,17 @@ Datei die Rezepte **Segmented Tabs**, **DateRange-/Dropdown-Trigger**, **Tooltip
 > **Verweise immer über den Abschnittsnamen, nie über eine Zeilennummer.** Frühere Angaben wie „§390" oder „§506"
 > waren Zeilennummern und sind mit jeder Ergänzung verrutscht.
 >
-> **Zwei Rezepte fehlen weiterhin und werden für WP5b gebraucht** (ADR-0037):
-> 1. **Donut** – §1 erlaubt ihn, ein Rezept gibt es nicht. Gebraucht für Device- und Channel-Distribution.
-> 2. **Gestyltes Tooltip-Popover** – der Eintrag „Tooltip-„?"" in §7 setzt auf das native `title`-Attribut. Das lässt
->    sich nicht stylen, erscheint verzögert und funktioniert auf Touch gar nicht. §5 nennt bereits einen
->    „Tooltip-Popover `shadow-lg`" – das Rezept dazu fehlt. Nach §10 trägt die Results-Seite ~10 Tooltips, die alle
->    Glossartexte zeigen; ohne Popover ist das nicht umsetzbar.
+> **Ein Rezept fehlt weiterhin und wird für WP5b gebraucht** (ADR-0037):
+> **Donut** – §1 erlaubt ihn, ein Rezept gibt es nicht. Gebraucht für Device- und Channel-Distribution. Er steht
+> **nicht in Figma**; er muss erst entworfen werden, bevor er hier beschrieben werden kann.
 >
-> Erledigt am 27.09.: Der Lab-Look steckt jetzt in den Theme-Tokens (§2), die Underline-Tabs für die Results-Tabs
-> haben ein Rezept (§7). Damit ist die Designsystem-Frage aus ADR-0037 entschieden – DESIGN.md gilt unverändert,
-> Slate/Emerald bleiben Theme-Werte und nie Klassennamen (§9).
+> Erledigt am 27.09.: Der Lab-Look steckt in den Theme-Tokens (§2), die Underline-Tabs haben ein Rezept (§7).
+> Erledigt am 01.10. (WP5a): Das **gestylte Tooltip-Popover** steht in §7 und ersetzt das native `title` – das ließ
+> sich nicht stylen, erschien verzögert und funktionierte auf Touch gar nicht, und die Results-Seite trägt nach §10
+> rund zehn Glossar-Tooltips. Dazu kamen die Lab-Komponenten aus den Figma-Foundations: Button auf sieben Stile,
+> Tabellenzellen mit hervorgehobener Primärmetrik-Spalte, Progress, Chip, Pagination, Segmented, Dropdown-Trigger,
+> ShopSwitcher und 36 Icons. Alle als React-Komponenten unter `app/components/`, alle in
+> **`/dashboard/styleguide`** (nur Development) in jeder Variante und in beiden Themes nachzusehen.
 
 ---
 
@@ -57,9 +58,21 @@ Zwei Themes:
   über Borders, nicht über Schatten.
 - `light` – unverändert der bisherige warme Look mit Mint + Lila. Wird separat angepasst; bis dahin nicht anfassen.
 
-Zusätzlich zu den daisyUI-Tokens gibt es vier eigene Tokens (`border-strong`, `nav-active`, `nav-active-bg`,
-`nav-active-line`), die als Tailwind-Farben verfügbar sind (`border-border-strong`, `text-nav-active` …). Ihre
-Light-Werte bilden den alten Look exakt nach.
+Zusätzlich zu den daisyUI-Tokens gibt es eigene Tokens, die als Tailwind-Farben verfügbar sind
+(`border-border-strong`, `bg-base-400`, `text-nav-active` …). Ihre Light-Werte bilden den alten Look nach, soweit es
+ihn gibt; die in WP5a dazugekommenen sind im Light Mode **provisorisch und nicht designt** (Figma zeichnet nur Dark).
+
+| Token | Dark | Light | Wofür |
+|---|---|---|---|
+| `border-strong` | `#475569` slate-600 | `#e5e1e1` | Outline von Default-/Secondary-Button, „+ Add"-Chip, neutraler Progress-Fill |
+| `base-400` *(neu 01.10.)* | `#334155` slate-700 | `#d9d4d4` *(provisorisch)* | Die Stufe zwischen `base-300` und `border-strong`: **gehobene Fläche** (aktives Segmented-Item, aktiver Filter) und **leiser Rahmen** (ghost-outline-Button, IconButton, Pagination, Popover-Rand) |
+| `danger-solid` *(neu 01.10.)* | `#ef4444` red-500 | `#d63c3c` | Der **gefüllte** Destruktiv-Button. Nicht `error`: daisyUIs `btn-error` ist das helle Rot mit dunkler Schrift, Figma will das satte Rot mit weißer Schrift |
+| `danger-solid-content` *(neu 01.10.)* | `#ffffff` | `#ffffff` | Schrift darauf |
+| `success-solid` *(neu 01.10.)* | `#10b981` emerald-500 | `#23884a` | Der **gefüllte** Progress-Balken. Bei voller Deckkraft ist der Unterschied zu `success` (emerald-400) sichtbar, bei 20 % nicht – deshalb nur hier ein eigener Wert |
+| `nav-active` / `-bg` / `-line` | Emerald-Satz | alter Look | Aktiver Nav-Eintrag (§6) |
+
+**`--color-info` ist im Dark Mode seit 01.10. Sky statt Lila** (`#7dd3fc`, Fläche `bg-info/20`). Figma nutzt es für
+den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label vorbehalten (§4).
 
 ```css
 /* app/app.css */
@@ -87,8 +100,8 @@ Light-Werte bilden den alten Look exakt nach.
   --color-secondary-content: #000000;
   --color-accent: #34d399;          /* emerald-400 – aktiv / positiv */
   --color-accent-content: #022c22;
-  --color-info: #c5acd3;
-  --color-info-content: #000000;
+  --color-info: #7dd3fc;            /* sky-300 – "ended"/neutral-informativ (WP5a, war Lila) */
+  --color-info-content: #082f49;
 
   --color-neutral: #1e293b;         /* Unsaved-Changes-Bar */
   --color-neutral-content: #f1f5f9;
@@ -121,14 +134,14 @@ Light-Werte bilden den alten Look exakt nach.
   --color-base-300: #e5e1e1; /* Borders, aktive Tabs */
   --color-base-content: #1c1b1b;
 
-  --color-primary: #9dd1bb;         /* identisch zu Dark */
+  --color-primary: #9dd1bb;         /* Mint */
   --color-primary-content: #000000;
   --color-secondary: #c5acd3;
   --color-secondary-content: #000000;
   --color-accent: #c5acd3;
   --color-accent-content: #000000;
-  --color-info: #c5acd3;
-  --color-info-content: #000000;
+  --color-info: #0369a1;            /* sky-700 – lesbar auf Weiß (provisorisch, nicht designt) */
+  --color-info-content: #ffffff;
 
   --color-neutral: #1c1b1b;         /* Unsaved-Bar bleibt dunkel (wie Shopify) */
   --color-neutral-content: #edeaea;
@@ -154,12 +167,20 @@ Light-Werte bilden den alten Look exakt nach.
 /* ── Eigene Tokens (Light-Werte = alter Look, Dark-Werte = Lab-Look) ─────── */
 :root, [data-theme="light"] {
   --sh-border-strong: #e5e1e1;                                   /* Outline des Default-Buttons */
+  --sh-base-400: #d9d4d4;                                        /* provisorisch, nicht designt */
+  --sh-danger-solid: #d63c3c;
+  --sh-danger-solid-content: #ffffff;
+  --sh-success-solid: #23884a;
   --sh-nav-active: #1c1b1b;                                      /* Text aktiver Nav-Eintrag */
   --sh-nav-active-bg: color-mix(in oklab, #1c1b1b 10%, transparent);
   --sh-nav-active-line: transparent;                             /* 2px-Linie links */
 }
 [data-theme="dark"] {
   --sh-border-strong: #475569;                                   /* slate-600 */
+  --sh-base-400: #334155;                                        /* slate-700 */
+  --sh-danger-solid: #ef4444;                                    /* red-500 */
+  --sh-danger-solid-content: #ffffff;
+  --sh-success-solid: #10b981;                                   /* emerald-500 */
   --sh-nav-active: #34d399;                                      /* emerald-400 */
   --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent); /* emerald-950/50 */
   --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent); /* emerald-500/60 */
@@ -167,6 +188,10 @@ Light-Werte bilden den alten Look exakt nach.
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --sh-border-strong: #475569;
+    --sh-base-400: #334155;
+    --sh-danger-solid: #ef4444;
+    --sh-danger-solid-content: #ffffff;
+    --sh-success-solid: #10b981;
     --sh-nav-active: #34d399;
     --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent);
     --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent);
@@ -177,6 +202,10 @@ Light-Werte bilden den alten Look exakt nach.
   --font-sans: "Geist", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
   --color-border-strong: var(--sh-border-strong);
+  --color-base-400: var(--sh-base-400);
+  --color-danger-solid: var(--sh-danger-solid);
+  --color-danger-solid-content: var(--sh-danger-solid-content);
+  --color-success-solid: var(--sh-success-solid);
   --color-nav-active: var(--sh-nav-active);
   --color-nav-active-bg: var(--sh-nav-active-bg);
   --color-nav-active-line: var(--sh-nav-active-line);
@@ -218,6 +247,10 @@ Light-Werte bilden den alten Look exakt nach.
   display: inline-block; width: 0.8rem; height: 0.8rem; flex-shrink: 0;
   border: 2px solid currentColor; border-right-color: transparent;
   border-radius: 9999px; opacity: 0.7; animation: app-spin 0.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-progress::after, .app-spinner { animation: none; }
 }
 ```
 
@@ -297,6 +330,10 @@ Platz für den Toggle: unten in der Sidebar neben der E-Mail / dem Abmelden-Butt
 | Tag-Chip in Input | `bg-base-content/10` | `bg-white/10` |
 | Hauptaktion | `btn btn-primary` (Dark: helle Fläche + dunkle Schrift · Light: Mint + schwarze Schrift) | — |
 | Default-Button | `btn` (Outline in `border-strong`, siehe §2 `@layer components`) | eigene Border-Klassen |
+| Gehobene Fläche (aktives Segmented-Item, aktiver Filter) | `bg-base-400`, `bg-base-400/50–60` | `bg-slate-700` |
+| Leiser Rahmen (ghost-outline, IconButton, Pagination, Popover) | `border-base-400` | `border-[#334155]` |
+| Destruktiv gefüllt | `bg-danger-solid text-danger-solid-content` | `btn-error` (falscher Rotton), `bg-red-500` |
+| Progress-Fill erfüllt | `bg-success-solid` | `bg-success` (zu hell bei voller Deckkraft) |
 | Akzent aktiv / positiv | `text-success`, `bg-success/20` (Dark = Emerald) | `text-emerald-*`, Hex |
 | Sekundär-Akzent / Badge | `badge-secondary` (Lila, schwarze Schrift) – nur Plan-/Feature-Label | — |
 
@@ -325,7 +362,7 @@ hinterlegen und per `[data-theme=light]` / `dark:`-Äquivalent tauschen (z. B. z
 
 ## 5. Typografie & Maße
 
-- Basis: `text-sm` (14px) für fast alles; `text-xs` (12px) für Meta/Labels; `text-[11px] uppercase tracking-wider text-base-content/50` für Card-Titel und Sidebar-Gruppen.
+- Basis: `text-sm` (14px) für fast alles; `text-xs` (12px) für Meta/Labels; `text-[11px] uppercase tracking-wider text-base-content/50` für Card-Titel. **Sidebar-Gruppen sind 12px** (`text-xs font-medium uppercase tracking-wider text-base-content/60`) – so zeichnet Figma sie, und neben den 14px-Nav-Einträgen trägt 11px zu wenig.
 - Seitentitel: `text-2xl font-semibold`. Section-Titel in Forms: `text-base font-semibold`. Login-Card: `text-lg font-semibold`.
 - KPI-Wert: `text-xl font-semibold`, Zahlen mit `tabular-nums`.
 - Schrift: Geist (`font-sans`); Keys, IDs, Datumswerte, E-Mail-Adressen in `font-mono` (Geist Mono).
@@ -536,15 +573,103 @@ Freies Panel (z. B. Filter): `absolute left-0 top-full z-20 mt-1.5 w-80 rounded-
 ```
 
 ### Buttons
-Alle Buttons `font-medium` (global in §2). Radius 8px, keine Pills.
-- Primär: `btn btn-primary` (+ `btn-sm` in Bars/Tabellen, `btn-xs` in Chips, `btn-block` in Login) – im Dark Mode hell mit dunkler Schrift
-- Sekundär/Default: `btn btn-sm` – base-200-Fläche mit Outline in `border-strong` (global in §2)
-- Ghost: `btn btn-ghost btn-sm`
-- Icon-Only: `btn btn-ghost btn-sm btn-square`
-- Destruktiv: `btn btn-error btn-sm` oder `btn btn-ghost btn-sm text-error`
-- Textlink: `hover:underline`; Löschen-X in Listen: `text-base-content/30 hover:text-error`
+**Komponente: `app/components/Button.tsx`** (Figma `Button` 109:149). Seit 01.10. **sieben** Stile statt fünf;
+`ghost-outline`, `danger-soft` und `danger-text` sind neu. Alle in `/dashboard/styleguide` nachzusehen.
+
+Die Klassen stehen ausgeschrieben in der Komponente statt auf daisyUIs `btn-*` aufzusetzen: vier der sieben haben
+kein daisyUI-Gegenstück, und eine halb-daisyUI/halb-eigene Mischung wäre das Schlechteste von beidem. Radius 8px,
+`font-medium`, keine Pills.
+
+| Stil | Fläche | Rahmen | Schrift |
+|---|---|---|---|
+| `primary` | `bg-primary` | – | `text-primary-content` (Dark: helle Fläche, dunkle Schrift) |
+| `secondary` | `bg-base-200/50` | `border-border-strong` | `text-base-content/90` |
+| `ghost` | – | – | `text-base-content/80` |
+| `ghost-outline` | – | `border-base-400` | `text-base-content/80` |
+| `danger` | `bg-danger-solid` | – | `text-danger-solid-content` |
+| `danger-soft` | `bg-danger-solid/10` | `border-error/50` | `text-error` |
+| `danger-text` | – | – | `text-error` |
+
+Größen: `sm` = `px-3 py-[7px] text-[13px]` (Icon 14px) · `md` = `px-4 py-[9px] text-sm` (Icon 16px) ·
+`lg` = `px-4 py-[11px] text-[15px]`. `icon` und `trailingIcon` nehmen ein beliebiges Icon aus §7 „Icons".
+
+- **Icon-Only:** `IconButton` aus derselben Datei (Figma 109:158) – quadratisch, `border-base-400`, 28px (`sm`) oder
+  32px (`md`). `label` ist Pflicht; ein Icon-Button ohne zugänglichen Namen ist mit Screenreader unbenutzbar.
+- Textlink: `hover:underline`; Löschen-X in Listen: `text-base-content/30 hover:text-error`.
+
+### Tooltip (gestyltes Popover)
+**Komponente: `app/components/Tooltip.tsx`** (Figma `TooltipTrigger` 109:159 – **nur der Trigger**; das Popover ist
+hier entworfen und vom Designer noch zu bestätigen).
+
+Ersetzt das frühere `title`-Attribut: das ließ sich nicht stylen, erschien verzögert und funktionierte auf Touch gar
+nicht. Die Results-Seite trägt nach §10 rund zehn Glossar-Tooltips – ohne Popover nicht umsetzbar.
+
+```jsx
+<span>Conversions <Tooltip text={glossary.conversions} /></span>
+```
+- Trigger: `size-4 rounded-full bg-base-content/10 text-[10px] font-semibold text-base-content/60`, Glyph „?"
+- Popover: `w-64 rounded-lg border border-base-400 bg-base-300 px-3 py-2 text-xs leading-relaxed text-base-content/90 shadow-lg`
+- Öffnet auf **Hover, Fokus und Klick** – Maus, Tastatur und Touch kommen alle dran. Escape schließt und gibt den
+  Fokus zurück, Klick außerhalb schließt (§8). `aria-describedby` verbindet Text und Trigger.
+- **Der Text kommt immer aus dem Glossar-Modul** (plan WP5a), nie inline im JSX – sonst driftet derselbe Begriff
+  zwischen den Seiten auseinander. Welche Begriffe überhaupt einen bekommen, steht in §10.
+
+### Progress (Stopp-Regel)
+**Komponente: `app/components/Progress.tsx`** (Figma 109:165). Der Fortschrittsbalken der Stopp-Regel aus ADR-0036,
+gemessen am **kleineren Arm**.
+
+- Track `h-1.5 rounded-full bg-base-300`, Fill `bg-success-solid` (erfüllt) bzw. `bg-border-strong` (neutral)
+- **Neutral, solange die Regel nicht erfüllt ist** – Farbe ist eine Wertung (§10, ADR-0037)
+- Die Komponente bringt **keine eigene Breite** mit: eine Breitenklasse hier würde mit der des Aufrufers kollidieren
+  und Tailwind entscheidet das nach Quellreihenfolge, nicht nach der Reihenfolge im String
+
+### Tabellenzellen (Performance-Tabelle)
+**Komponente: `app/components/Table.tsx`** (Figma `Table/HeadCell` 110:137, `Table/Cell` 110:162). Die
+Gesamttabelle auf Results-Overview und die Tabellen der Segment-Tabs sind **dieselbe Komponente** (ADR-0037).
+
+- `primary` = die hervorgehobene Primärmetrik-Spalte: Kopf `bg-base-300/50`, Zelle `bg-base-300/35`, dazu `star`
+  im Kopf. Hervorhebung über **Größe und Fläche, nie über Zusatztext** (§10)
+- `kind="metric"` = der große Wert, `text-lg font-semibold tabular-nums`
+- `sub` = die Zeile darunter, auf Results der Lift („+11,6 % vs A"). Sie bleibt **neutral grau**; es gibt bewusst
+  keinen `tone`-Prop, der sie grün färben könnte
+- `TableFrame` bringt den horizontalen Scroll **im eigenen Container** mit – die Seite scrollt nie seitwärts
+
+### Chip · Pagination · Segmented · Dropdown-Trigger · SearchInput
+**Komponenten: `app/components/Controls.tsx`** (Figma 109:173 · 109:174 · 110:116 · 110:71 · 110:72).
+
+- **Chip** `rounded-md bg-base-300 py-0.5 pl-2 pr-1.5 text-xs` mit ✕; **AddChip** `border-border-strong` für
+  „+ Add day". Das ist der Tainted-Days-Editor in der Checks-Liste (ADR-0037)
+- **Pagination** `rounded-lg border border-base-400`, drei Segmente mit `border-x` dazwischen
+- **Segmented** Container `rounded-lg bg-base-300/60 p-[3px]`, aktives Item `rounded-md bg-base-400 font-medium`
+- **DropdownTrigger** inaktiv wie `secondary`; **aktiv** `border-base-content/60 bg-base-400/50` plus ✕ zum Leeren –
+  auf Results heißt aktiv „Explore-Modus" (ADR-0034)
+- **SearchInput** `rounded-lg bg-base-300/60 py-2 pl-9 pr-3` mit Lupe links
+
+### ShopSwitcher
+**Komponente: `app/components/ShopSwitcher.tsx`** (Figma 105:440 / 110:163). **Nur Darstellung** – welcher Kontext
+daran hängt und ob der Shop in die URL wandert, ist in STATUS.md offen und braucht erst ein ADR.
+Die Favicon-Farbe wird aus der Domain abgeleitet, nicht gespeichert – eine `Shop.color`-Spalte für eine Dekoration
+wäre die falsche Art von dauerhaft.
+
+### Formularfelder (Checkbox · Radio · Input)
+**Komponente: `app/components/Form.tsx`** (Figma 8:94 · 8:102 · 8:123). Diese drei sind in Figma als **veraltet**
+markiert und deshalb **nicht** abgezeichnet, sondern aus dem aktuellen Token-Satz gebaut – vom Designer zu bestätigen.
+`locked` ist der Zustand aus Vertrag 4.6 (Targeting, Allocation, Weights, Salt bei `RUNNING` gesperrt): gerendert als
+disabled mit Schloss und Erklärung. Die eigentliche Sperre liegt im Service-Layer, nicht in einer CSS-Klasse.
+
+### Icons
+**`app/components/icons.tsx`** – 36 Icons, Inline-SVG, 24er-Viewbox, `stroke="currentColor"`, `strokeWidth={2}`,
+gerendert mit 15–16px (§1). Die Pfade sind aus **Lucide** übernommen (ISC), womit auch die Figma-Icons gezeichnet
+wurden. **Keine Icon-Library als Abhängigkeit** (§1) und **nie** `<img>` auf eine Figma-Asset-URL – die laufen nach
+sieben Tagen ab und sind flachgerechnete Outlines, die kein `currentColor` annehmen.
 
 ### Badges
+**Komponente: `app/components/Badge.tsx`** (Figma 109:64) – sechs Tones: `neutral` · `success` · `warning` ·
+`error` · `info` · `draft` (gestrichelt), optional mit Dot. Zuordnung: running = `success` + Dot · paused =
+`warning` · draft = `draft` · ended = `info` · Fehler = `error` · alles andere `neutral`. Dazu **VariantKey**
+(Figma 115:1395), die A/B/C-Box vor einem Variantennamen.
+
+Die daisyUI-`badge-*`-Klassen unten gelten weiter für die Stellen, die sie schon nutzen.
 Alle Badges sind Pills (`rounded-full`, global in §2); `badge-soft` hat keinen Rahmen.
 - Status: `badge badge-sm badge-soft badge-success` (aktiv) · `badge-soft badge-warning` (eingefroren/pausiert) · `badge-soft badge-error` · `badge-ghost` (inaktiv / neutral)
 - Tags: `badge badge-sm badge-outline`
@@ -593,7 +718,7 @@ Alle Badges sind Pills (`rounded-full`, global in §2); `badge-soft` hat keinen 
 ```
 - Checkbox: `checkbox checkbox-primary checkbox-xs` (gleiches Label-Muster wie Radio)
 - Select: `select select-sm w-full` / `select-xs` in Popovers
-- Tooltip-„?": `ml-1.5 inline-flex size-4 cursor-help items-center justify-center rounded-full bg-base-content/10 align-middle text-[10px] font-semibold text-base-content/60` mit `title`
+- Tooltip-„?": `<Tooltip text={glossary.key} />` – Rezept oben, **nicht** mehr das native `title`
 - Tag-Input: Wrapper `flex flex-wrap gap-1.5 rounded-lg border border-base-300 bg-base-100 p-1.5`, Chips `badge badge-sm gap-1 border-0 bg-base-content/10`, Input `min-w-32 flex-1 border-0 bg-transparent px-1.5 py-1 text-sm outline-none`
 
 ### Alerts (Feedback nach Action)
@@ -669,8 +794,13 @@ Chevron: 16px SVG `m9 6 6 6-6 6`, `shrink-0 text-base-content/40 transition-tran
 
 **Do**
 - Nur daisyUI-Semantik-Tokens (`base-*`, `primary`, `secondary`, `accent`, `neutral`, `success/warning/error`) und die
-  eigenen Tokens aus §2 (`border-strong`, `nav-active*`) + Opacity-Modifier (`/60`, `/40` …). Keine Tailwind-Paletten
-  wie `slate-*` oder `emerald-*` in Klassen – die Slate/Emerald-Werte stecken nur im Theme.
+  eigenen Tokens aus §2 (`border-strong`, `base-400`, `danger-solid`, `success-solid`, `nav-active*`) +
+  Opacity-Modifier (`/60`, `/40` …). Keine Tailwind-Paletten wie `slate-*` oder `emerald-*` in Klassen – die
+  Slate/Emerald-Werte stecken nur im Theme.
+- **Figma zeichnet rohe Hex-Werte, keine Variablen.** Beim Übertragen also nicht abschreiben, sondern auf ein Token
+  abbilden; wo keins passt, in §2 eins **anlegen**. Für die Grautöne gilt die Tabelle in §4: `#e2e8f0` ≈
+  `text-base-content/90`, `#cbd5e1` ≈ `/80`, `#94a3b8` ≈ `/60`, `#64748b` ≈ `/40`. Der Opacity-Weg verliert etwas
+  vom Blaustich der Slate-Werte – das ist der Preis des Tokensystems und ausdrücklich so gewollt.
 - Cards flach: Border, kein Schatten. Schatten nur für Popovers.
 - Kompakt: `btn-sm`, `table-sm`, `input-sm` in Bars; Standardgröße nur in Formularen.
 - Icons als Inline-SVG, `currentColor`, 15–16px, in `text-base-content/40–50`.
