@@ -72,7 +72,10 @@ den Typen *page view* (URL-Regel), *Shopify event*, *custom event from code* und
 Custom Goal als Primärmetrik. **Das ist exakt der Umfang, der am 01.10. in plan.md §9 als Phase 2 festgehalten wurde**
 (`Metric` ist heute ein Enum `CR | RPV | AOV`, Vertrag 4.8 kennt nur Order-Conversions). Entweder zieht Phase 1 die
 Custom Goals mit hoch – neuer Vertrag, neue Tabelle `GoalEvent`, Proxy-Route, Snippet-Arbeit, Web-Pixel-Extension für
-Shopify-Events – oder das Formular wird ohne die Goals-Karte gebaut. **Entscheidung Joel, blockiert WP5a.**
+Shopify-Events – oder das Formular wird ohne die Goals-Karte gebaut. **Entschieden (Joel, 01.10.): Weg B** – das Formular wird **ohne die Goals-Karte** gebaut, die Primärmetrik bleibt
+vorerst das Drei-Werte-Select (`CR | RPV | AOV`). Custom Goals bleiben Phase 2 (plan.md §9); die Karte und die beiden
+Modals kommen nach, wenn das Backend dafür steht. Begründung: sonst steht das ganze Dashboard, bis ein ungeplantes
+Backend fertig ist. Mit entfällt vorerst auch **„Also measured"**.
 
 **Zweite Modelländerung: „Also measured".** Heute zeigt der Report immer alle drei Metriken; im Entwurf wählt man aus,
 welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
