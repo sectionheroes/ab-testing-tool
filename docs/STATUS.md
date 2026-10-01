@@ -147,6 +147,15 @@ welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
 - ADR für Switcher-Kontext, Sidebar-Gruppen und ADMIN-only-Allowlist; plan.md WP5a entsprechend nachziehen.
 - Entscheidung Deckungsindex für 1 Mio. Exposures (+238 MB, −40 ms) – Empfehlung: nein.
 - WP6: Retention für `SnippetError`/`Exposure` in `/jobs/cleanup`, Cron `/jobs/daily-stats`; Lasttest auf Render vor WP7.
+- **Attributions-Abdeckung vor WP7 prüfen** (Befund aus der WP4.1-Abnahme, hier aufbewahrt, weil er offen ist): Die
+  zwei Pfade versagen unterschiedlich. Das **Cart-Attribut** übersteht Line-Item-Merges (Bundle-Apps,
+  `cartTransform`), fehlt aber bei „Buy Now"; die **Line-Item-Property** deckt Buy Now, kann aber bei Bundle- und
+  Ajax-Cart-Apps verlorengehen, die ihr Payload von Hand bauen statt `FormData` zu nehmen. **Headless (Hydrogen) ist
+  gar nicht abgedeckt** – Onboarding-Voraussetzung, keine Lücke. Fällt beides aus, greift der ADR-0032-Fallback und
+  die Order landet sichtbar in `unknown`. Die **86 % Device-Link-Rate gelten für ein Standard-Theme ohne
+  Drittanbieter-Apps**; gezielt gegen die Apps testen, die unsere Kunden einsetzen. Ebenso erneut prüfen, dass
+  `_ab_v` auf einem **Kunden-Theme** nicht in der Bestätigungsmail und nicht auf der Order-Status-Seite auftaucht –
+  am Dev-Store mit Standard-Theme gemessen, nicht aus der Doku belegt.
 - **Shop in der URL?** (`/dashboard/s/<shop>/…`) – der Switcher-Vorschlag lässt das offen. Routing-Entscheidung, die
   vor WP5a fallen muss, weil sie die Route-Struktur festlegt.
 - WP5b-Blocker, Stand 01.10.: **Tooltip-Popover erledigt** (DESIGN.md §7). **Donut offen** – nicht in Figma, muss
