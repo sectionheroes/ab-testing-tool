@@ -1,27 +1,44 @@
 # Status
-Stand: 2026-10-01
+Stand: 2026-10-02
 
 ## Aktuell
-**WP5a-Designsystem fertig**, Branch `wp5a-design-system`, PR gegen `main` offen. **Keine Seite gebaut** – diese
-Session hat das Designsystem an Figma angeglichen, damit WP5a und 5b danach Zusammenbau sind und nicht
-Klassen-Abschreiben. 469 Unit-Tests, 73 DB-Tests, typecheck und lint grün.
+**WP5a gebaut**, Branch `wp5a-dashboard`, PR gegen `main`. Die Vorgänger-Session hat das Designsystem an Figma
+angeglichen; diese hat die Seiten daraus **zusammengesetzt** – keine Klasse von Hand. **512 Unit-Tests, 106 DB-Tests,
+typecheck und lint grün. Abnahme WP5a komplett pass**, Belege in `docs/screenshots/wp5a/` (32 Screenshots, jede Seite
+in beiden Themes) und im PR-Text.
 
-**Befund, der den Anlass erklärt:** `app/app.css` war noch komplett der **alte** Look (warmes Grau + Mint, Inter),
-während DESIGN.md §2 seit dem 27.09. den Lab-Look beschreibt. Vier Tage lang hat keine Seite so ausgesehen, wie die
-Spec sagt, weil nichts die beiden vergleicht. Jetzt sind sie byte-identisch und ein Test hält sie zusammen
-(`app/design-system.test.ts`).
+**Gebaut:** Navigation nach ADR-0038 (Shop in der URL, Switcher mit Experiment-Zahlen aus demselben Loader, Gruppen
+*Testing* / *Manage*, alte Links leiten um; `localStorage` entscheidet nur die Landing-Route) · Experiments-Liste
+(2-21) · Experiment-Formular (2-22, Rechner einwegs, `lib/stats` unangetastet, zwei CodeMirror-Editoren je Variante) ·
+kleine Experiment-Seite mit Start/Pause, Setup, QA-Force-Links und History (**nicht** Results) · Shops · Users ·
+Reconciliation · Glossar (`app/lib/glossary.ts`). Jeder Guard liegt in der Service-Schicht: Allowlisten/Freischalten
+und alle User-Mutationen ADMIN-only (ADR-0038, mit Test), 4.6 in `updateExperiment`, die Stopp-Regel in
+`setStoppingRule`.
 
-**Was drin ist:** Lab-Theme in `app/app.css` · fünf neue Tokens in DESIGN.md §2 (`base-400`, `danger-solid`,
-`danger-solid-content`, `success-solid`, dazu `--color-info` im Dark von Lila auf Sky) · §7-Rezepte für die neuen und
-geänderten Komponenten · React-Komponenten unter `app/components/` (Button mit **sieben** Stilen, IconButton, Badge,
-VariantKey, Tooltip, Progress, Chip, Pagination, Dropdown-Trigger, SearchInput, Tab, Segmented, Table-Zellen,
-ShopSwitcher, Checkbox/Radio/Input, MobileTopBar, 36 Icons) · **`/dashboard/styleguide`** (nur Development) zeigt
-alles in jeder Variante in beiden Themes.
+**Gegen den Dev Store gefahren:** anlegen → Save as draft → Start (Metafield geschrieben) → Code-Hotfix auf `RUNNING`
+(AuditLog `CODE_CHANGED_WHILE_RUNNING`, Metafield sofort aktualisiert) → Targeting-Änderung abgelehnt → Stopp-Regel
+lockern abgelehnt → Pause (Experiment fällt aus dem Metafield). Der Dev Store ist wieder wie vorher.
 
-**Drei Lücken aus ADR-0037 sind zu:** das gestylte **Tooltip-Popover** (ersetzt das native `title`, das sich nicht
-stylen ließ und auf Touch nicht funktionierte), die **Primärmetrik-Spalte** in den Tabellenzellen und der
-**Progress-Balken** der Stopp-Regel. **Der Donut fehlt weiter** – er steht nicht in Figma und muss erst entworfen
-werden; vorher kann DESIGN.md ihn nicht beschreiben.
+**Vier Befunde beim Zusammenbauen, alle behoben:** (1) **`Alert` war farblos** – die Klassen entstanden per
+Interpolation, also hat Tailwind `.alert-warning` nie erzeugt; die von 4.8 geforderte AOV-Warnung war ein graues
+Kästchen. (2) **Die native Browser-Validierung schluckte die eigene** (`step={100}` machte 1000 ungültig) → jetzt
+`noValidate`. (3) **4.6 verglich zu streng**: ein `targeting` aus älterer Schreibweise (WP2-Seed: `{}`) sah nach einer
+Änderung aus und hätte den Hotfix gesperrt → beide Seiten normalisiert, Device-Liste in fester Reihenfolge.
+(4) **Teilweise gespeichert**, wenn die Stopp-Regel ablehnte → die Regel läuft jetzt zuerst.
+
+**Bewusste Abweichungen von Figma:** Progress-Balken **neutral grau** statt emerald (DESIGN.md §7/ADR-0037 – offen,
+siehe unten) · **keine Goals-Karte** (Weg B, Phase 2); die Primärmetrik sitzt als Drei-Werte-Select in „Basics", weil
+eine Karte „Goals" mit einem Select das fehlende Feature verspräche · **kein QA-Bereich im DRAFT** (4.2/4.4) ·
+„est. 06.10.**2026**" mit Jahr · **Trigger als Radios** – der Auftrag nannte das einen Zeichenfehler, der Designer hat
+am 01.10. nachgesehen: in Figma sind es bereits `Radio`-Instanzen, es gab nichts zu korrigieren · „≈ 12,5 %" statt
+12,4 % (aus `mdeFromConversions`, nicht aus dem Entwurf) · Users und Reconciliation sind nicht gezeichnet.
+
+**Bewusst nicht gebaut:** die **Results-Seite** (WP5b) und der **Stop-Dialog** (siehe Offen).
+
+**Neu im Repo:** `pnpm seed:demo` und `pnpm screenshots <ordner>`; beide nur gegen `localhost` (`scripts/local-only.ts`).
+Eine Listenzeile mit **erfüllter** Stopp-Regel braucht für ihr Urteil die volle Aggregation (höchstens zwölf je
+Seite); alles andere läuft über `listCounts()` – eine Abfrage für alle Zeilen, dieselben Zählregeln wie 4.8,
+festgenagelt gegen `computeExperimentStats` in `experiment-list.server.db.test.ts`.
 
 **Abnahme a–n von WP4.1 bleibt pass** (PR #5, `d032124`); Lasttest realistisch 120–205 ms, 1 Mio. 547–1.124 ms.
 
@@ -135,15 +152,64 @@ welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
   beim Trigger „scrolls into view" (2) · **AOV als Primärmetrik erzeugt die Warnung aus 4.8** (3) · Inline-Validierung
   bei vergebenem Key (4) · **erster Test eines Shops → Baseline wird eingegeben statt abgeleitet** (5) · **Prognose
   über 6 Wochen → amber**, die Futility-Warnung aus ADR-0036 (6) · eigene Rechnung für RPV (7).
-- Die Stopp-Regel bleibt im Entwurf **zwei Felder** (Conversions + „Minimum runtime" in Tagen); der Vorschlag, sie zu
-  `minFullWeeks` zusammenzuziehen, ist nicht eingearbeitet.
-- **Vermutlicher Entwurfsfehler:** „As soon as the page loads" und „When an element scrolls into view" sind als
-  **Checkboxen** gezeichnet. Der Trigger ist laut Datenmodell exklusiv (`immediate` | `visible`), das müssen Radios
-  sein. Nur „Hide the page until the variant is ready" ist eine echte Checkbox.
-- In der Sidebar steht neben der Benutzer-Mail die Stopp-Regel („1.000 conversions per arm · 14 days · full weeks") –
-  sieht nach einem **globalen Default** aus. Ort der Regel (global / pro Shop / pro Experiment) ist zu bestätigen.
+- ~~Die Stopp-Regel bleibt im Entwurf zwei Felder~~ – **überholt**: Die Karte „When is it decided?" hat seit 01.10.
+  nur noch „Conversions per variant" und „Minimum runtime [n] full weeks" (siehe Eintrag Experiment-Formular oben).
+- ~~Vermutlicher Entwurfsfehler: Trigger als Checkboxen~~ – **kein Fehler** (Designer, 01.10.): In allen Frames der
+  Seite „Experiment form" sind „As soon as the page loads" / „When an element scrolls into view" Instanzen von
+  `Radio`, nur „Hide the page…" ist `Checkbox`. In Figma nichts nachzuziehen; WP5a baut Radios, wie geplant.
+- ~~Stopp-Regel in der Sidebar~~ – **Lesefehler**: Der Text „joel@… · stopping rule 1.000 conversions per arm · 14 days ·
+  full weeks" ist die Zeile *Created* in der **History** (AuditLog-Eintrag beim Anlegen), nicht die Sidebar. Die Regel
+  liegt pro Experiment (Datenmodell), Defaults 1.000 / 14 / volle Wochen aus ADR-0036.
+
+## Design-Entscheidungen (01.10. abends, Figma – WP5b-Blocker, noch nicht in plan.md/ADR)
+- **Donut entworfen** – Komponenten `Chart/Donut`, `Chart/LegendItem`, `Chart/DonutBlock` + Spec-Tafel auf
+  Foundations, Rezept DESIGN.md §7 „Donut". Alle 51 Donuts auf der Results-Seite sind jetzt Instanzen. Entschieden:
+  **Prozent sichtbar** in der Legende (Anteilsfrage; absolute Zahlen je Segment stehen in der Tab-Tabelle),
+  **Gesamtzahl in der Mitte**, **Hover/Tap** zeigt in der Mitte die absolute Zahl des Segments. 104 px, Ring 14,
+  2°-Lücken, größtes Segment zuerst, Other/Unknown zuletzt. Leerzustand und Ein-Segment-Fall gezeichnet.
+  **Neu: Grau als fünfte Chart-Farbe** (`#64748b`, nur für Other/Unknown) in DESIGN.md §4 – die Palette hatte keine
+  neutrale Farbe, und Grün/Rot sind für Urteile reserviert.
+- **Modal-Rezept** – Bausteine `Modal/Header`, `Modal/Footer` (inline/stacked × default/destructive × idle/busy),
+  `Modal/Callout`, `RadioCard`, `Field/Label`, `Textarea`, `Modal/Handle`, `Modal/Scrim`, `Icon/spinner`; die vier
+  Results-Dialoge, das Bottom Sheet und zwei neue Frames (busy, langer Body) sind daraus gebaut. Entschieden:
+  Breiten 480 (Bestätigung) / 560 (mit Formular), max. Viewport − 64, nur der Body scrollt, Scrim als **neues Token
+  `scrim`**, Schatten `shadow-xl`. **Unter 640 px ist jedes Modal ein Bottom Sheet**, nicht nur Stop early.
+  Scrim-Klick schließt nicht, sobald ein Feld Eingaben hat. Busy: Spinner, alles gesperrt, Escape wirkungslos.
+  *Weicht ab von:* plan.md WP5b spricht vom „decision-Select" – gezeichnet und spezifiziert ist eine Gruppe
+  **RadioCards** (jede Option mit Erklärung, nicht erlaubte bleiben sichtbar-disabled). Fachlich gleich (`decision`
+  Pflicht, vier Werte).
+- **Statuszeile korrigiert**: Die Figma-Frames zeigten bereits die drei Bedingungen aus ADR-0036, nicht mehr „40 % of
+  12.000 visitors" (der Eintrag in plan.md WP5b/ADR-0037 ist damit erledigt). Nachgezogen: „Verdict est." →
+  **„Evaluable on <Datum>"**, Fortschrittsbalken **neutral** statt grün (war ein Verstoß gegen §10/Progress-Rezept),
+  mobil steht „Evaluable on" als eigene letzte Zeile (das Datum wurde abgeschnitten). Die Planwerte (Baseline, MDE,
+  α, Power) stehen im neuen **rich Tooltip-Popover** als letzte Zeile.
+- **Designer-Abnahme der Code-Übertragung** (Details DESIGN.md §2/§7): Tooltip-Popover **bestätigt** (`base-300`,
+  Rand `base-400`) – Figma hatte für den rich-Tooltip `base-200`, jetzt angeglichen; neue Komponente
+  `Tooltip/Popover` (simple · rich). **Checkbox/Radio/Input/MobileTopBar** in Figma als aktuell markiert, mit drei
+  Code-Korrekturen: Input `bg-base-100` (vertieft) und 40 px statt `bg-base-200`/38 px; gesetzte Checkbox/Radio über
+  **neues Token `control-checked`** (im Light Mode ist das gesetzte Mint-Radio auf Weiß kaum sichtbar);
+  MobileTopBar wie Figma (Logo links, Menü rechts, kein Seitentitel). **Light-Werte** sonst stimmig; Styleguide-Texte
+  „Allocation must be between 0 and 1" und „1000" sind für Laien falsch (Prozent, de-DE).
+- Die zwei neuen Tokens (`scrim`, `control-checked`) stehen **nur in der DESIGN.md-Tabelle**, noch nicht im
+  §2-CSS-Block und nicht in `app/app.css` – die WP5a-Session arbeitet parallel im Working Tree. Beim Übernehmen beides
+  im selben Commit ändern, sonst wird `app/design-system.test.ts` rot.
 
 ## Offen
+- **plan.md WP5a nachziehen.** Der Abschnitt beschreibt noch den beidseitigen Rechner, eine feste Sample-Size-Spalte,
+  Filter-Chips und Navigation ohne Shop in der URL. Gebaut ist der Stand aus STATUS/ADR-0038; die Verträge in §4 sind
+  unberührt. Dazu: der QA-Bereich im Formular (Force-Links im DRAFT) entfällt, die Goals-Karte ist Phase 2.
+- **Vom Designer zu entscheiden: Farbe des Fortschrittsbalkens in der Experiments-Liste.** Figma zeichnet ihn emerald,
+  gebaut ist er neutral grau nach DESIGN.md §7/ADR-0037. Dieselbe Frage wurde in der Results-Statuszeile am 01.10.
+  zugunsten von neutral entschieden – wenn das auch hier gilt, stimmt Figma 2-21 nicht mehr.
+- **Die Korrekturen der Design-Session vom 01.10. abends sind noch nicht im Code:** die zwei neuen Tokens (`scrim`,
+  `control-checked`) stehen nur in der DESIGN.md-Tabelle, nicht im §2-CSS-Block und nicht in `app/app.css`; dazu
+  Input auf `bg-base-100`/40 px und MobileTopBar ohne Seitentitel. Alles in **einem** Commit, sonst wird
+  `app/design-system.test.ts` rot. Gehört in die Session, die als Nächstes am Designsystem arbeitet – diese hier hat
+  bewusst nicht in `app.css` gegriffen.
+- **Der Stop-Dialog fehlt, also kann ein Experiment im UI nicht beendet werden.** Bewusst: er verlangt `decision` +
+  `conclusion`, warnt bei unerfüllter Stopp-Regel, bietet Pause an und friert endgültig ein (ADR-0025/0036) – das ist
+  WP5b, und das Modal-Rezept dafür ist erst seit dem 01.10. abends gezeichnet. Bis dahin geht Stop über die
+  Service-Schicht (`pnpm experiment:status`) und ab 5c über die CLI.
 - ~~ADR für Switcher-Kontext, Sidebar-Gruppen und ADMIN-only-Allowlist~~ → **ADR-0038 (01.10.)**: Switcher ist der
   Kontext, **Shop in der URL** (`/dashboard/s/:shop/…`, `all` als Wert), Gruppen *Testing* / *Manage*, Allowlisten nur
   ADMIN in der Service-Schicht. Hebt zugleich die Zurückhaltung der Design-System-Session beim Umhängen der Sidebar
@@ -159,10 +225,11 @@ welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
   Drittanbieter-Apps**; gezielt gegen die Apps testen, die unsere Kunden einsetzen. Ebenso erneut prüfen, dass
   `_ab_v` auf einem **Kunden-Theme** nicht in der Bestätigungsmail und nicht auf der Order-Status-Seite auftaucht –
   am Dev-Store mit Standard-Theme gemessen, nicht aus der Doku belegt.
-- WP5b-Blocker, Stand 01.10.: **Tooltip-Popover erledigt** (DESIGN.md §7). **Donut offen** – nicht in Figma, muss
-  erst entworfen werden. Weiter offen: volle Verdict-Karte, Leer-/„too few"-Zustände, und die Figma-Statuszeile zeigt
-  noch die abgelöste visitor-basierte Sample Size statt der Stopp-Regel (ADR-0036).
-- **Modal-Rezept** fehlt in DESIGN.md – gebraucht für „Add goal" (Custom Goals) und den Stop-Dialog (WP5b).
+- WP5b-Blocker, Stand 01.10. abends: **Donut, Modal, Tooltip-Popover und Statuszeile erledigt** (DESIGN.md §7,
+  Figma Foundations + Results). Die volle Verdict-Karte und die Leerzustände sind in den Results-Frames b, c und g
+  gezeichnet; **noch nicht gezeichnet ist der „too few"-Zustand** (Strich mit Tooltip in Segmenttabellen, 4.10) – klein,
+  aber nicht blockierend. plan.md WP5b „Vor 5b zu klären" und ADR-0037 „offener Konflikt" können als erledigt
+  markiert werden (plan.md-Edit steht aus).
 - **Logo:** die Shell zeigt weiter die Text-Wortmarke; die PNGs aus DESIGN.md §4 liegen nicht im Repo.
 - WP-R: Distribution Method auf `sh-ab` prüfen (Public, irreversibel) → PCD Level 1 + `read_all_orders` → Listing.
   PCD wird **durch** das App Review freigegeben, das Listing liegt damit auf dem kritischen Pfad. Vor dem Einreichen
@@ -178,8 +245,9 @@ welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
   `browser.cookie` (`_shab_vid`) noch zu prüfen. (b) Klick/Seitenaufruf/`shab.track` kosten Snippet-Budget (8 KB).
   (c) Neue Tabelle für Goal-Events + Retention 12 Monate wie `Exposure`. (d) Stopp-Regel und Rechner für ein Custom
   Goal als Primary. (e) Snapshot (`ExperimentResult`) muss Custom-Goal-Zahlen und -Definition einfrieren.
-  (f) DESIGN.md hat kein Modal-Rezept.
+  (f) ~~DESIGN.md hat kein Modal-Rezept~~ – erledigt (§7 „Modal").
 - ~~Formular offen~~ → entschieden (Joel/Claude, 01.10.): **Hypothese nicht Pflicht** (Disziplin, keine Validierung) ·
   **Start nur auf der Detailseite**, das Formular endet mit „Save as draft" · die **Tempo-Quelle wird beschriftet**
   („at the pace of your last test in this shop") statt Exaktheit vorzutäuschen – bei anderem Targeting stimmt sie nicht.
-- Design als Nächstes: Mobile-Liste, Shops-Seite, Formular-Review, Edit-Zustand `RUNNING` (4.6).
+- Design als Nächstes: Mobile-Liste, Shops-Seite, Edit-Zustand `RUNNING` (4.6), „too few"-Zelle; im Formular die
+  Goals-Karte als Phase 2 kennzeichnen (Weg B) und den Drei-Werte-Select für die Primärmetrik zurückzeichnen.

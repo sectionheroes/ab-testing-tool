@@ -489,7 +489,7 @@ export async function setTaintedDay(
 export async function rpvPlanningInputs(
   shopId: string,
   opts: { days?: number; visitors?: number; now?: Date; db?: Db } = {},
-): Promise<{ orders: number; aov: number; aovSd: number; cr: number | null; mean: number | null; sd: number | null }> {
+): Promise<{ orders: number; aov: number; aovSd: number; secondMoment: number; cr: number | null; mean: number | null; sd: number | null }> {
   const db = opts.db ?? prisma;
   const days = opts.days ?? 30;
   const now = opts.now ?? new Date();
@@ -506,13 +506,17 @@ export async function rpvPlanningInputs(
     select: { totalPrice: true },
   });
   const amounts = rows.map((r) => Number(r.totalPrice));
-  if (amounts.length === 0) return { orders: 0, aov: NaN, aovSd: NaN, cr: null, mean: null, sd: null };
+  if (amounts.length === 0) return { orders: 0, aov: NaN, aovSd: NaN, secondMoment: NaN, cr: null, mean: null, sd: null };
 
   const aov = amounts.reduce((s, a) => s + a, 0) / amounts.length;
   const aovVariance = amounts.length > 1 ? amounts.reduce((s, a) => s + (a - aov) ** 2, 0) / (amounts.length - 1) : 0;
+  // E[AOV²] over the same window. `rpvMomentsFromOrders` computes it internally from the amounts; returning it lets
+  // the planner (WP5a) recompute σ for a baseline CR the user types, without shipping 30 days of order values to the
+  // browser. Same formula, one place – `planner.test.ts` pins the two against each other.
+  const secondMoment = amounts.reduce((s, a) => s + a * a, 0) / amounts.length;
   const cr = opts.visitors && opts.visitors > 0 ? amounts.length / opts.visitors : null;
   const rpv = cr !== null ? rpvMomentsFromOrders(cr, amounts) : null;
-  return { orders: amounts.length, aov, aovSd: Math.sqrt(aovVariance), cr, mean: rpv?.mean ?? null, sd: rpv?.sd ?? null };
+  return { orders: amounts.length, aov, aovSd: Math.sqrt(aovVariance), secondMoment, cr, mean: rpv?.mean ?? null, sd: rpv?.sd ?? null };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -900,4 +904,131 @@ export async function computeBreakdown(
   const experiment = await loadExperimentForStats(experimentId, db);
   if (!experiment) throw new Error(`computeBreakdown: experiment ${experimentId} not found`);
   return breakdown(experiment, dimension, opts);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// listCounts() – the cheap counts the experiments list needs (WP5a)
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * Visitors and converting visitors per arm for **several** experiments in one query.
+ *
+ * The experiments list shows a conversion count and the stopping-rule progress for every running and paused row.
+ * Running `computeExperimentStats()` per row would mean one full aggregation each – at the measured 120–205 ms that
+ * is two to four seconds for a page of twenty. This query answers only the two numbers the list actually needs and
+ * drops everything the full aggregation does on top: revenue, winsorized moments, per-device splits, per-order rows.
+ *
+ * It is the **same counting rules** as `rawStatsRows`, deliberately in the same shape so the two can be read side by
+ * side: the `_ab_v` join of ADR-0033, the ADR-0032 customer fallback, the dropped-exposure check of 4.8, and
+ * `COUNT(DISTINCT identity)` for "a visitor with three orders converts once".
+ *
+ * **Tainted days are the one thing it does not do.** They are per experiment, manual and rare (ADR-0026), and
+ * carrying a per-experiment day list into a batched query costs more than it saves. `listCounts` therefore refuses
+ * experiments that have tainted days; `experiments.server.ts` falls back to the full aggregation for those few.
+ */
+export type ListCountRow = { experimentId: string; variantId: string; visitors: number; converters: number };
+
+export type ListCountInput = {
+  id: string;
+  startedAt: Date | null;
+  endedAt: Date | null;
+};
+
+export async function listCounts(experiments: ListCountInput[], opts: { now?: Date; db?: Db } = {}): Promise<ListCountRow[]> {
+  const db = opts.db ?? prisma;
+  const now = opts.now ?? new Date();
+  const started = experiments.filter((e) => e.startedAt !== null);
+  if (started.length === 0) return [];
+
+  const windows = Prisma.join(
+    started.map(
+      (e) =>
+        Prisma.sql`(${e.id}, ${utcTimestamp(e.startedAt as Date)}, ${utcTimestamp(e.endedAt ?? now)})`,
+    ),
+    ", ",
+  );
+
+  const rows = await db.$queryRaw<{ experiment_id: string; variant_id: string; visitors: number; converters: number }[]>`
+    WITH win(experiment_id, window_from, window_to) AS (VALUES ${windows}),
+    visitors AS (
+      SELECT e."experimentId" AS experiment_id, e."variantId" AS variant_id, COUNT(*)::int AS n
+      FROM "Exposure" e
+      JOIN win w ON w.experiment_id = e."experimentId"
+      WHERE e."isBot" = false
+      GROUP BY 1, 2
+    ),
+    counting_orders AS (
+      SELECT oa."experimentId" AS experiment_id,
+             oa."variantId"    AS variant_id,
+             o.id              AS order_id,
+             oa."visitorId"    AS visitor_id,
+             o."customerId"    AS customer_id,
+             o."createdAt"     AS created_at
+      FROM "OrderAttribution" oa
+      JOIN "Order" o ON o.id = oa."orderId"
+      JOIN win w ON w.experiment_id = oa."experimentId"
+      WHERE o."isTest" = false
+        AND o."cancelledAt" IS NULL
+        AND o."sourceName" NOT IN ('pos', 'shopify_draft_order')
+        AND o."createdAt" >= w.window_from
+        AND o."createdAt" <= w.window_to
+    ),
+    linked AS (
+      SELECT co.*,
+             kv."visitorId" AS kv_visitor,
+             kc.found       AS kc_found,
+             (
+               kv."visitorId" IS NULL
+               AND co.visitor_id IS NOT NULL
+               AND EXISTS (SELECT 1 FROM "Exposure" d WHERE d."experimentId" = co.experiment_id AND d."visitorId" = co.visitor_id)
+             ) AS visitor_dropped
+      FROM counting_orders co
+      LEFT JOIN "Exposure" kv
+        ON kv."experimentId" = co.experiment_id
+       AND kv."visitorId" = co.visitor_id
+       AND kv."isBot" = false
+       AND kv."variantId" = co.variant_id
+       AND kv."firstSeenAt" <= co.created_at
+      LEFT JOIN LATERAL (
+        SELECT true AS found
+        FROM "Exposure" e
+        WHERE co.visitor_id IS NULL
+          AND e."experimentId" = co.experiment_id
+          AND e."customerId" = co.customer_id
+          AND e."isBot" = false
+          AND e."variantId" = co.variant_id
+          AND e."firstSeenAt" <= co.created_at
+        LIMIT 1
+      ) kc ON true
+    ),
+    converters AS (
+      SELECT experiment_id, variant_id,
+             COUNT(DISTINCT COALESCE(visitor_id, customer_id, 'order:' || order_id))::int AS n
+      FROM linked
+      WHERE NOT visitor_dropped
+        -- The ADR-0032 customer path: an order that names a customer we have seen an exposure for but could not link
+        -- to this arm is dropped, exactly as in rawStatsRows.
+        AND NOT (
+          kv_visitor IS NULL
+          AND visitor_id IS NULL
+          AND customer_id IS NOT NULL
+          AND kc_found IS NULL
+          AND EXISTS (SELECT 1 FROM "Exposure" d WHERE d."experimentId" = experiment_id AND d."customerId" = customer_id)
+        )
+      GROUP BY 1, 2
+    )
+    SELECT COALESCE(v.experiment_id, c.experiment_id) AS experiment_id,
+           COALESCE(v.variant_id, c.variant_id)       AS variant_id,
+           COALESCE(v.n, 0)                           AS visitors,
+           COALESCE(c.n, 0)                           AS converters
+    FROM visitors v
+    FULL OUTER JOIN converters c ON c.experiment_id = v.experiment_id AND c.variant_id = v.variant_id
+  `;
+
+  return rows.map((r) => ({
+    experimentId: r.experiment_id,
+    variantId: r.variant_id,
+    visitors: Number(r.visitors),
+    converters: Number(r.converters),
+  }));
 }

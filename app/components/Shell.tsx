@@ -1,37 +1,101 @@
-import type { ReactNode } from "react";
-import { Form, NavLink, useNavigation } from "react-router";
+import { useEffect, useState, type ReactNode } from "react";
+import { Form, NavLink, useLocation, useNavigate, useNavigation } from "react-router";
 import ThemeToggle from "./ThemeToggle";
 import { Badge } from "./Badge";
+import { ShopSwitcher, type SwitcherShop } from "./ShopSwitcher";
 import { Flask, LogOut, Scales, Store, Users } from "./icons";
 
 // DESIGN.md §6 Layout-Shell. Also rendered by the dashboard ErrorBoundary so navigation stays clickable.
 //
-// WP5a brought the lab look here: the active entry is the `nav-active*` recipe from §6 (emerald text on an emerald
-// wash behind a 2px left line) instead of the flat `bg-base-content/10`, and every entry carries its Figma icon.
-// The **grouping is deliberately unchanged**. Figma regroups it into Testing (Experiments, Reconciliation – they
-// follow the ShopSwitcher) and Manage (Shops, Users), which is an information-architecture decision that STATUS.md
-// still lists as needing an ADR. Restyling is this session's job; re-routing is not.
+// **The grouping is ADR-0038.** The design-system session restyled the sidebar but deliberately left the old grouping
+// alone, because regrouping it is an information-architecture decision and there was no ADR for one. ADR-0038 made it:
+//
+//   Testing  – Experiments, Reconciliation. These **follow the shop switcher** above them and their URLs carry the
+//              shop (`/dashboard/s/:shop/…`, with `all` as a real value for the global view).
+//   Manage   – Shops (ADMIN and MEMBER), Users (ADMIN only). Always global; they ignore the switcher, which is
+//              exactly why they are not in the Testing group.
+//
+// The switcher writes the chosen shop to localStorage, but **only** so the landing route after login can reopen it.
+// The URL stays the single source of truth, because two browser tabs on two shops is the agency's normal day and a
+// hidden global would make them fight.
+
+export const SHOP_STORAGE_KEY = "shab.shop";
+export const ALL_SHOPS = "all";
+
+export function rememberShop(value: string) {
+  try {
+    localStorage.setItem(SHOP_STORAGE_KEY, value);
+  } catch {
+    /* private mode, blocked storage – the URL still works, which is the point of the URL */
+  }
+}
+
+export function rememberedShop(): string {
+  try {
+    return localStorage.getItem(SHOP_STORAGE_KEY) || ALL_SHOPS;
+  } catch {
+    return ALL_SHOPS;
+  }
+}
+
+export type ShellUser = { email: string; role: "ADMIN" | "MEMBER" | "CLIENT" };
 
 type NavItem = { to: string; label: string; badge?: string; icon?: ReactNode };
 type NavGroup = { title: string; items: NavItem[] };
 
-const INTERNAL_NAV: NavGroup[] = [
-  {
-    title: "Testing",
-    items: [
-      { to: "/dashboard/shops", label: "Shops", icon: <Store size={16} /> },
-      { to: "/dashboard/experiments", label: "Experiments", icon: <Flask size={16} /> },
-      { to: "/dashboard/reconciliation", label: "Reconciliation", icon: <Scales size={16} /> },
-    ],
-  },
-  {
-    title: "Admin",
-    items: [{ to: "/dashboard/users", label: "Users", icon: <Users size={16} /> }],
-  },
-];
+function navFor(user: ShellUser, shopParam: string): NavGroup[] {
+  if (user.role === "CLIENT") return [];
+  const manage: NavItem[] = [{ to: "/dashboard/shops", label: "Shops", icon: <Store size={16} /> }];
+  if (user.role === "ADMIN") manage.push({ to: "/dashboard/users", label: "Users", icon: <Users size={16} /> });
+  return [
+    {
+      title: "Testing",
+      items: [
+        { to: `/dashboard/s/${shopParam}/experiments`, label: "Experiments", icon: <Flask size={16} /> },
+        { to: `/dashboard/s/${shopParam}/reconciliation`, label: "Reconciliation", icon: <Scales size={16} /> },
+      ],
+    },
+    { title: "Manage", items: manage },
+  ];
+}
 
-export function Shell({ user, nav = INTERNAL_NAV, children }: { user: { email: string }; nav?: NavGroup[]; children: ReactNode }) {
+export function Shell({
+  user,
+  shops = [],
+  shopParam = ALL_SHOPS,
+  children,
+}: {
+  user: ShellUser;
+  /** ACTIVE shops with their experiment counts – loaded in the same round as the page (ADR-0038). */
+  shops?: SwitcherShop[];
+  /** The `:shop` segment of the current URL: a myshopify domain, or `all`. */
+  shopParam?: string;
+  children: ReactNode;
+}) {
   const busy = useNavigation().state !== "idle";
+  const navigate = useNavigate();
+  const location = useLocation();
+  const internal = user.role !== "CLIENT";
+
+  // The Manage pages carry no shop in their URL, because they are global (ADR-0038). The sidebar still has to point
+  // its Testing links somewhere, so there it falls back to the remembered shop — which is the one case localStorage
+  // is allowed to decide. Read after mount, so the server and the first client render agree.
+  const onTestingRoute = location.pathname.startsWith("/dashboard/s/");
+  const [fallback, setFallback] = useState(ALL_SHOPS);
+  useEffect(() => {
+    if (!onTestingRoute) setFallback(rememberedShop());
+  }, [onTestingRoute]);
+  const context = onTestingRoute ? shopParam : fallback;
+  const selected = shops.find((s) => s.domain === context) ?? null;
+
+  const switchTo = (shop: SwitcherShop | null) => {
+    const next = shop ? shop.domain : ALL_SHOPS;
+    rememberShop(next);
+    // Stay on the same testing section; a shop switch is a change of context, not of subject.
+    const section = typeof window !== "undefined" && window.location.pathname.includes("/reconciliation") ? "reconciliation" : "experiments";
+    navigate(`/dashboard/s/${next}/${section}`);
+  };
+
   return (
     <div className="flex min-h-screen bg-base-100 font-sans text-base-content">
       {busy && <div className="app-progress" aria-hidden="true" />}
@@ -41,8 +105,14 @@ export function Shell({ user, nav = INTERNAL_NAV, children }: { user: { email: s
           <Wordmark />
         </div>
 
+        {internal && (
+          <div className="shrink-0 px-3 pt-3">
+            <ShopSwitcher shops={shops} selected={selected} onSelect={switchTo} onManage={() => navigate("/dashboard/shops")} />
+          </div>
+        )}
+
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          {nav.map((group) => (
+          {navFor(user, context).map((group) => (
             <div key={group.title} className="mb-4 last:mb-0">
               <div className="px-3 pb-1.5 text-xs font-medium uppercase tracking-wider text-base-content/60">{group.title}</div>
               {group.items.map((item) => (

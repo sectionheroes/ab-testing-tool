@@ -26,6 +26,8 @@ pnpm db:migrate     # prisma migrate dev against the local Postgres (.env = post
 pnpm seed:admin <email>   # upsert a dashboard ADMIN (script, not a migration)
 pnpm seed:load [exposures] [orders]   # synthetic load fixture on the LOCAL db (default 1M/30k); prints the aggregation and breakdown timings
 pnpm measure:load [experimentId]      # re-measures an EXISTING fixture without seeding – for iterating on a query
+pnpm seed:demo      # demo shops/experiments on the LOCAL db for working on the dashboard; only creates, never deletes
+pnpm screenshots docs/screenshots/<wp>   # acceptance screenshots of every dashboard page, both themes, LOCAL only (needs pnpm dev:dashboard)
 pnpm sync:config <shop>   # reserve `server` + rebuild/write the `client` metafield from RUNNING experiments
 pnpm experiment:status <shop> <key> <RUNNING|PAUSED|ENDED> [decision]   # status change via the service layer (writes the metafield)
 pnpm variant:code <shop> <key> <variant> --js <file> --css <file>       # code save via the service layer (hotfix on RUNNING)

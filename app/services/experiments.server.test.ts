@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = {
-  experiment: { findUnique: vi.fn(), update: vi.fn() },
-  variant: { findUnique: vi.fn(), update: vi.fn() },
+  experiment: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
+  variant: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn(), delete: vi.fn() },
+  exposure: { count: vi.fn() },
   auditLog: { create: vi.fn() },
   experimentResult: { delete: vi.fn() },
   // The ENDED path wraps the update and the snapshot in one transaction (ADR-0025); the mock just runs the callback.
@@ -13,7 +14,9 @@ const syncShopConfig = vi.fn();
 vi.mock("./metafields.server", () => ({ syncShopConfig }));
 const freezeExperimentResult = vi.fn();
 vi.mock("./experiment-result.server", () => ({ freezeExperimentResult }));
-const { setExperimentStatus, saveVariantCode, setStoppingRule, ExperimentError } = await import("./experiments.server");
+const { setExperimentStatus, saveVariantCode, setStoppingRule, createExperiment, updateExperiment, newSalt, ExperimentError } = await import(
+  "./experiments.server"
+);
 
 const RULE: { minConversionsPerArm: number | null; minDurationDays: number | null; requireFullWeeks: boolean } = {
   minConversionsPerArm: 1_000,
@@ -24,7 +27,24 @@ const base = { id: "e1", shopId: "shop1", key: "demo-test", status: "DRAFT", sta
 const ok = { skipped: false, bytes: 1, experiments: 1, updatedAt: "t", config: {} };
 
 beforeEach(() => {
-  for (const m of [db.experiment.findUnique, db.experiment.update, db.variant.findUnique, db.variant.update, db.auditLog.create, db.experimentResult.delete, syncShopConfig, freezeExperimentResult]) m.mockReset();
+  for (const m of [
+    db.experiment.findUnique,
+    db.experiment.findFirst,
+    db.experiment.update,
+    db.experiment.create,
+    db.variant.findUnique,
+    db.variant.update,
+    db.variant.create,
+    db.variant.delete,
+    db.exposure.count,
+    db.auditLog.create,
+    db.experimentResult.delete,
+    syncShopConfig,
+    freezeExperimentResult,
+  ])
+    m.mockReset();
+  db.experiment.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...base, ...data, id: "new1" }));
+  db.exposure.count.mockResolvedValue(0);
   freezeExperimentResult.mockResolvedValue({ id: "res1", created: true, statsVersion: "1.0.0", snapshot: {} });
   db.experiment.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...base, ...data }));
   db.variant.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "v1", key: "b", ...data }));
@@ -185,5 +205,215 @@ describe("setStoppingRule", () => {
     at("DRAFT");
     await setStoppingRule("e1", { minDurationDays: 28 }, "joel");
     expect(syncShopConfig).not.toHaveBeenCalled();
+  });
+});
+
+// ── Create and edit: contract 4.6 ──────────────────────────────────────────
+
+const write = (over: Partial<Parameters<typeof createExperiment>[1]> = {}) => ({
+  name: "PDP: Reviews above price",
+  key: "pdp-reviews-above-price",
+  hypothesis: null,
+  primaryMetric: "CR" as const,
+  targeting: { url: { match: "contains", value: "/products/" }, device: ["mobile", "desktop", "tablet"] },
+  trigger: { type: "immediate" },
+  hideUntilApplied: false,
+  allocation: 1,
+  variants: [
+    { key: "a", name: "Control", weight: 0.5, isControl: true, js: null, css: null },
+    { key: "b", name: "Reviews above price", weight: 0.5, isControl: false, js: "x", css: null },
+  ],
+  stoppingRule: { minConversionsPerArm: 1000, minDurationDays: 14, requireFullWeeks: true },
+  ...over,
+});
+
+const runningRow = (over: Record<string, unknown> = {}) => ({
+  ...base,
+  status: "RUNNING",
+  startedAt: new Date("2026-09-01T00:00:00Z"),
+  key: "pdp-reviews-above-price",
+  name: "PDP: Reviews above price",
+  hypothesis: null,
+  primaryMetric: "CR",
+  allocation: 1,
+  hideUntilApplied: false,
+  targeting: { url: { match: "contains", value: "/products/" }, device: ["mobile", "desktop", "tablet"] },
+  trigger: { type: "immediate" },
+  variants: [
+    { id: "va", key: "a", name: "Control", weight: 0.5, isControl: true, js: null, css: null },
+    { id: "vb", key: "b", name: "Reviews above price", weight: 0.5, isControl: false, js: "x", css: null },
+  ],
+  ...over,
+});
+
+describe("createExperiment", () => {
+  it("always creates a DRAFT, with a salt, and never writes the metafield", async () => {
+    db.experiment.findUnique.mockResolvedValue(null);
+    await createExperiment("shop1", write(), "joel");
+    const data = db.experiment.create.mock.calls[0][0].data;
+    expect(data.status).toBe("DRAFT");
+    expect(data.salt).toMatch(/^[0-9a-f]{4}$/); // contract 4.2 shows a short hex salt
+    expect(data.minConversionsPerArm).toBe(1000);
+    expect(data.minDurationDays).toBe(14);
+    expect(data.requireFullWeeks).toBe(true);
+    // Only RUNNING experiments go into the `client` metafield (4.2), so a draft pushes nothing.
+    expect(syncShopConfig).not.toHaveBeenCalled();
+    expect(db.auditLog.create.mock.calls[0][0].data).toMatchObject({ action: "CREATED" });
+  });
+
+  it("refuses a key that is taken in this shop", async () => {
+    db.experiment.findUnique.mockResolvedValue({ id: "other" });
+    await expect(createExperiment("shop1", write(), "joel")).rejects.toMatchObject({ code: "KEY_TAKEN" });
+    expect(db.experiment.create).not.toHaveBeenCalled();
+  });
+
+  it("newSalt is four hex characters", () => {
+    expect(newSalt()).toMatch(/^[0-9a-f]{4}$/);
+  });
+});
+
+describe("updateExperiment – contract 4.6", () => {
+  it("DRAFT: everything may change", async () => {
+    db.experiment.findUnique.mockResolvedValue({ ...runningRow({ status: "DRAFT", startedAt: null }) });
+    db.experiment.findFirst.mockResolvedValue(null);
+    const { hotfix, sync } = await updateExperiment("e1", write({ allocation: 0.5, key: "renamed" }), "joel");
+    expect(hotfix).toBe(false);
+    expect(sync).toBeNull(); // nothing to push: a draft is not in the metafield
+    expect(db.experiment.update.mock.calls[0][0].data).toMatchObject({ key: "renamed", allocation: 0.5 });
+  });
+
+  it("RUNNING: variant code is a hotfix – audit entry and an immediate metafield write", async () => {
+    db.experiment.findUnique.mockResolvedValue(runningRow());
+    const { hotfix } = await updateExperiment("e1", write({ variants: [
+      { key: "a", name: "Control", weight: 0.5, isControl: true, js: null, css: null },
+      { key: "b", name: "Reviews above price", weight: 0.5, isControl: false, js: "fixed", css: null },
+    ] }), "joel");
+    expect(hotfix).toBe(true);
+    expect(syncShopConfig).toHaveBeenCalledWith("shop1");
+    const entries = db.auditLog.create.mock.calls.map((c) => c[0].data);
+    const marker = entries.find((e) => e.action === "CODE_CHANGED_WHILE_RUNNING");
+    // The frozen snapshot reads `diff.variant` to place its "variant changed on <date>" marker (ADR-0025), so one
+    // entry per changed variant, in the same shape `saveVariantCode` writes.
+    expect(marker).toMatchObject({ diff: { variant: "b", fields: ["js"] } });
+  });
+
+  it("RUNNING: two changed variants give two markers", async () => {
+    db.experiment.findUnique.mockResolvedValue(
+      runningRow({
+        variants: [
+          { id: "va", key: "a", name: "Control", weight: 0.5, isControl: true, js: null, css: null },
+          { id: "vb", key: "b", name: "Reviews above price", weight: 0.5, isControl: false, js: "x", css: null },
+        ],
+      }),
+    );
+    await updateExperiment("e1", write({ variants: [
+      { key: "a", name: "Control", weight: 0.5, isControl: true, js: "new", css: null },
+      { key: "b", name: "Reviews above price", weight: 0.5, isControl: false, js: "fixed", css: "new" },
+    ] }), "joel");
+    const markers = db.auditLog.create.mock.calls.map((c) => c[0].data).filter((e) => e.action === "CODE_CHANGED_WHILE_RUNNING");
+    expect(markers.map((m) => m.diff)).toEqual([
+      { variant: "a", fields: ["js"] },
+      { variant: "b", fields: ["js", "css"] },
+    ]);
+  });
+
+  it("a save that changes nothing writes no audit entry at all", async () => {
+    const row = runningRow();
+    db.experiment.findUnique.mockResolvedValue(row);
+    // The update returns the row it was asked to write, which for an unchanged save is the row itself.
+    db.experiment.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...row, ...data }));
+    await updateExperiment("e1", write(), "joel");
+    expect(db.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("RUNNING: targeting, allocation, weights, trigger and key are locked", async () => {
+    const cases: [string, Parameters<typeof updateExperiment>[1]][] = [
+      ["key", write({ key: "something-else" })],
+      ["targeting", write({ targeting: { url: { match: "contains", value: "/collections/" }, device: ["mobile"] } })],
+      ["trigger", write({ trigger: { type: "visible", selector: ".x" } })],
+      ["allocation", write({ allocation: 0.5 })],
+      [
+        "weights",
+        write({
+          variants: [
+            { key: "a", name: "Control", weight: 0.7, isControl: true, js: null, css: null },
+            { key: "b", name: "Reviews above price", weight: 0.3, isControl: false, js: "x", css: null },
+          ],
+        }),
+      ],
+    ];
+    for (const [field, input] of cases) {
+      db.experiment.findUnique.mockResolvedValue(runningRow());
+      db.experiment.update.mockClear();
+      await expect(updateExperiment("e1", input, "joel")).rejects.toMatchObject({ code: "LOCKED" });
+      expect(db.experiment.update, `${field} must not reach the database`).not.toHaveBeenCalled();
+    }
+  });
+
+  it("RUNNING: name, hypothesis and primary metric stay editable", async () => {
+    db.experiment.findUnique.mockResolvedValue(runningRow());
+    await updateExperiment("e1", write({ name: "New name", hypothesis: "Because …", primaryMetric: "RPV" }), "joel");
+    expect(db.experiment.update.mock.calls[0][0].data).toMatchObject({ name: "New name", hypothesis: "Because …", primaryMetric: "RPV" });
+    // The locked fields are not even present in the update, rather than present and unchanged.
+    expect(db.experiment.update.mock.calls[0][0].data).not.toHaveProperty("allocation");
+    expect(db.experiment.update.mock.calls[0][0].data).not.toHaveProperty("targeting");
+  });
+
+  it("ENDED is frozen", async () => {
+    db.experiment.findUnique.mockResolvedValue(runningRow({ status: "ENDED" }));
+    await expect(updateExperiment("e1", write(), "joel")).rejects.toMatchObject({ code: "LOCKED" });
+  });
+
+  it("a variant that has been served is never deleted, even on a draft", async () => {
+    db.experiment.findUnique.mockResolvedValue(
+      runningRow({
+        status: "DRAFT",
+        startedAt: null,
+        variants: [
+          { id: "va", key: "a", name: "Control", weight: 0.5, isControl: true, js: null, css: null },
+          { id: "vb", key: "b", name: "B", weight: 0.25, isControl: false, js: null, css: null },
+          { id: "vc", key: "c", name: "C", weight: 0.25, isControl: false, js: null, css: null },
+        ],
+      }),
+    );
+    db.experiment.findFirst.mockResolvedValue(null);
+    db.exposure.count.mockResolvedValue(3); // c already collected data
+    await updateExperiment("e1", write(), "joel");
+    expect(db.variant.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateExperiment – the lock compares normalised shapes", () => {
+  it("an older row whose targeting is `{}` can still be hotfixed", async () => {
+    // The WP2 seed writes `targeting: {}`. The form always submits the full contract-4.2 shape, so a byte comparison
+    // would call that a targeting change and refuse the one edit 4.6 keeps open on a running experiment.
+    db.experiment.findUnique.mockResolvedValue(runningRow({ targeting: {} }));
+    const { hotfix } = await updateExperiment(
+      "e1",
+      write({
+        targeting: { url: { match: "contains", value: "" }, device: ["mobile", "desktop", "tablet"] },
+        variants: [
+          { key: "a", name: "Control", weight: 0.5, isControl: true, js: null, css: null },
+          { key: "b", name: "Reviews above price", weight: 0.5, isControl: false, js: "fixed", css: null },
+        ],
+      }),
+      "joel",
+    );
+    expect(hotfix).toBe(true);
+  });
+
+  it("but a real targeting change is still refused", async () => {
+    db.experiment.findUnique.mockResolvedValue(runningRow({ targeting: {} }));
+    await expect(
+      updateExperiment("e1", write({ targeting: { url: { match: "contains", value: "/products/" }, device: ["mobile"] } }), "joel"),
+    ).rejects.toMatchObject({ code: "LOCKED" });
+  });
+
+  it("key order in the stored JSON is not a change", async () => {
+    db.experiment.findUnique.mockResolvedValue(
+      runningRow({ targeting: { device: ["tablet", "desktop", "mobile"], url: { value: "/products/", match: "contains" } } }),
+    );
+    const { hotfix } = await updateExperiment("e1", write(), "joel");
+    expect(hotfix).toBe(false); // nothing changed in this call, but crucially: not LOCKED either
   });
 });

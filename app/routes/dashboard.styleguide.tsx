@@ -14,7 +14,8 @@ import { PageHeader } from "../components/PageHeader";
 import { Badge, BADGE_TONES, VariantKey } from "../components/Badge";
 import { Button, BUTTON_SIZES, BUTTON_STYLES, IconButton, buttonIconSize, type ButtonSize, type ButtonStyle } from "../components/Button";
 import { AddChip, Chip, DropdownTrigger, Pagination, SearchInput, Segmented, Tab } from "../components/Controls";
-import { Checkbox, Input, Radio } from "../components/Form";
+import { CodeField } from "../components/CodeField";
+import { Checkbox, FormSection, Input, Radio, Select, Textarea, UnsavedBar } from "../components/Form";
 import { MobileTopBar } from "../components/MobileTopBar";
 import { Progress } from "../components/Progress";
 import { ShopSwitcher, type SwitcherShop } from "../components/ShopSwitcher";
@@ -246,7 +247,7 @@ export default function Styleguide() {
         </TableFrame>
       </Section>
 
-      <Section title="ShopSwitcher" note="Figma 105:440 / 110:163. Presentation only — the switcher context still needs an ADR (STATUS.md).">
+      <Section title="ShopSwitcher" note="Figma 105:440 / 110:163. ADR-0038 made it the context of the Testing pages; the shop lives in the URL.">
         <div className="w-64">
           <ShopSwitcher shops={SHOPS} selected={shop} onSelect={setShop} onManage={() => undefined} />
         </div>
@@ -268,8 +269,60 @@ export default function Styleguide() {
         <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
           <Input label="Name" placeholder="e.g. PDP reviews above price" />
           <Input label="Key" mono defaultValue="pdp-reviews-above-price" locked hint="Locked while the experiment is running (contract 4.6)." />
-          <Input label="Conversions per variant" size="sm" defaultValue="1000" />
-          <Input label="Allocation" defaultValue="1.4" error="Allocation must be between 0 and 1." />
+          {/* Both of these said something a layperson cannot act on (DESIGN.md §10, designer 01.10.): a raw "1000"
+              instead of a de-DE number, and an allocation expressed as the 0–1 fraction the model stores rather than
+              the percentage the form asks for. */}
+          <Input label="Conversions per variant" size="sm" defaultValue="1.000" />
+          <Input label="Visitors in test" defaultValue="140" error="Visitors in test has to be between 1 and 100 %." />
+        </div>
+      </Section>
+
+      <Section
+        title="Select · Textarea"
+        note="Added in WP5a-dashboard. Same box as Input; the menu is the browser's — Figma draws the trigger only, and a hand-rolled listbox would be a new accessible component for the sake of a popup nobody designed."
+      >
+        <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
+          <Select label="Primary – decides the test" defaultValue="CR">
+            <option value="CR">Conversion rate</option>
+            <option value="RPV">Revenue per visitor</option>
+            <option value="AOV">Average order value</option>
+          </Select>
+          <Select label="Pages" size="sm" defaultValue="contains">
+            <option value="contains">URL contains</option>
+            <option value="exact">URL is exactly</option>
+            <option value="regex">URL matches pattern</option>
+          </Select>
+          <Select label="Locked while running (4.6)" locked defaultValue="contains">
+            <option value="contains">URL contains</option>
+          </Select>
+          <Select label="With an error" error="Pick a shop.">
+            <option>Choose a shop</option>
+          </Select>
+          <Textarea label="Hypothesis" rows={3} placeholder="If we … then … because …" className="sm:col-span-2" />
+        </div>
+      </Section>
+
+      <Section title="FormSection · UnsavedBar" note="DESIGN.md §7 Formulare. The unsaved bar is the only save button on an edit form — a second one in the header asks the same question twice.">
+        <div className="max-w-2xl">
+          <UnsavedBar onDiscard={() => undefined} />
+          <FormSection title="Basics">
+            <Input label="Name" placeholder="e.g. PDP: Reviews above price" />
+          </FormSection>
+        </div>
+      </Section>
+
+      <Section
+        title="CodeField"
+        note="CodeMirror 6 (ADR-0017), loaded after mount — it has no server rendering and is the heaviest thing on the form. Until it loads, and without JavaScript, the same value sits in the textarea underneath, which is also the field that gets submitted. Colours come from the §2 tokens, not from a packaged theme."
+      >
+        <div className="grid max-w-4xl gap-4 lg:grid-cols-2">
+          <CodeField
+            name="sg-js"
+            label="JavaScript"
+            language="javascript"
+            defaultValue={"// Move the star rating above the price\nconst rating = document.querySelector('.product__rating');\nconst price  = document.querySelector('.product__price');\n\nif (rating && price) {\n  price.before(rating);\n  rating.classList.add('shab-rating-top');\n}"}
+          />
+          <CodeField name="sg-css" label="CSS" language="css" defaultValue={".shab-rating-top {\n  margin-bottom: 8px;\n  font-size: 15px;\n}"} />
         </div>
       </Section>
 
