@@ -37,6 +37,26 @@ ohne Drittanbieter-Apps**; vor WP7 gezielt gegen die Apps testen, die unsere Kun
   „Control kept"); SRM steht nur dort („Assignment broken"). *Ersetzt* plan.md 5a „Sample-Size-Fortschritt" (abgelöst).
 - **Offen, nicht entschieden:** Goals-Tab Variante B (Tabelle pro Goal + aufklappbarer Chart). Widerspricht ADR-0037
   („Goals = nur Charts"); bräuchte ein ablösendes ADR.
+- **Experiment-Formular (29.09./01.10., Figma-Seite „Experiment form“ – Entwurf, Review mit Joel läuft):** zwei Spalten.
+  Links: *Basics* (Name, Key klein darunter, Hypothese) · *Goals* · *Where it runs* (URL-Regel, Devices, „Count a
+  visitor“ = Trigger, Hide-until-ready) · *Variants* (Anteil im Test, Splits, pro Variante **zwei getrennte Editoren
+  JS und CSS untereinander**, keine Tabs – Joel 01.10.; Control ohne Code). Rechts sticky **eine** Karte „When is it decided?“ mit nur **zwei Eingaben** (Joel
+  01.10.): „Conversions per variant“ (= `minConversionsPerArm`) mit abgeleitetem „≈ 12,4 % detectable lift“ daneben,
+  und „Minimum runtime [n] full weeks“ (UI schreibt `minDurationDays = 7·n`, `requireFullWeeks = true`). Darüber
+  Baseline-CR mit Quelle, darunter die Laufzeit-Prognose. Salt beim Anlegen nicht sichtbar. „Save as draft“ legt nur
+  `DRAFT` an.
+  *Weicht ab von:* WP5a – Rechner nicht mehr „beidseitig“ (MDE ist nur noch abgeleitet, keine Eingabe),
+  Primary metric kein festes Feld CR/RPV/AOV mehr; ADR-0036 – `requireFullWeeks` im UI nicht mehr abschaltbar,
+  Laufzeit nur in ganzen Wochen (Feld im Modell bleibt, Lockern in DRAFT entfällt damit).
+- **Custom Goals (Joel 01.10. – neu, nicht in plan.md):** eigene Karte *Goals*: links Dropdown „Primary – decides
+  the test“ (CR/RPV/AOV und alle Custom Goals – auch ein Custom Goal kann Primary sein), rechts „Also measured“ als
+  Pills (Custom Goals mit ×, gestrichelte Pill „+ Add goal“ öffnet das Modal). Custom Goals leben **pro Shop**,
+  wiederverwendbar; Modal „Add goal“ = vorhandene wählen oder „New goal“ anlegen. Vier Typen: Klick auf Selector,
+  Seitenaufruf (URL-Regel), Shopify-Standard-Event, eigenes Event per `shab.track('name')`. Zählt pro Visitor einmal
+  (binomial wie CR). Basisrate für den Rechner aus früherem Test mit dem Goal, sonst manuell.
+  *Weicht ab von:* plan.md §3 (kein Goal-Modell), 4.8 (Urteil nur auf CR/RPV/AOV), 4.9 (Charts pro Goal nur für die
+  drei), rahmen.md §1/§3 (neue Event-Last und Retention). → braucht ADR + **neuen** Vertrag (Goal-Event-Payload,
+  additiv zu 4.5), siehe Offen.
 - **Figma:** Alle geteilten UI-Teile sind Komponenten auf „Foundations" (Sidebar, ShopSwitcher, Button, Badge, Icons,
   Table-Zellen …); Frames nutzen nur Instanzen. Noch alt: MobileTopBar, Checkbox/Radio/Input.
 
@@ -51,4 +71,15 @@ ohne Drittanbieter-Apps**; vor WP7 gezielt gegen die Apps testen, die unsere Kun
 - WP-R: Distribution Method auf `sh-ab` prüfen (Public, irreversibel) → PCD Level 1 + `read_all_orders` → Listing.
   PCD wird **durch** das App Review freigegeben, das Listing liegt damit auf dem kritischen Pfad. Vor dem Einreichen
   „Limit visibility" setzen.
-- Design als Nächstes: Mobile-Liste, Shops-Seite, Formular.
+- **QA vor dem Start geht mit den aktuellen Verträgen nicht:** Force-Links (4.4) wirken nur auf Experimente im
+  Metafield, und dort stehen nur `RUNNING` (4.2). Ein `DRAFT` ist also nicht per `?ab_force` prüfbar. Braucht eine
+  Entscheidung (z. B. neuer additiver Vertrag für einen QA-Status) bevor der QA-Bereich im Formular Sinn ergibt.
+- **Custom Goals – vor der Umsetzung zu klären:** (a) Shopify-Events gibt es nur über eine **App Pixel Extension**
+  (`analytics.subscribe`, per Dev-MCP geprüft) – zweite Extension, review-relevant, Sandbox, Visitor-Bindung über
+  `browser.cookie` (`_shab_vid`) noch zu prüfen. (b) Klick/Seitenaufruf/`shab.track` kosten Snippet-Budget (8 KB).
+  (c) Neue Tabelle für Goal-Events + Retention 12 Monate wie `Exposure`. (d) Stopp-Regel und Rechner für ein Custom
+  Goal als Primary. (e) Snapshot (`ExperimentResult`) muss Custom-Goal-Zahlen und -Definition einfrieren.
+  (f) DESIGN.md hat kein Modal-Rezept.
+- Formular offen: Hypothese Pflicht? Start-Button im Formular oder nur auf der Detailseite? Tempo-Quelle der
+  Laufzeit-Prognose (letzter Test im Shop passt nicht zu anderem Targeting).
+- Design als Nächstes: Mobile-Liste, Shops-Seite, Formular-Review, Edit-Zustand `RUNNING` (4.6).
