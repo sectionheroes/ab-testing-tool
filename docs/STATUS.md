@@ -144,7 +144,10 @@ welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
   sieht nach einem **globalen Default** aus. Ort der Regel (global / pro Shop / pro Experiment) ist zu bestätigen.
 
 ## Offen
-- ADR für Switcher-Kontext, Sidebar-Gruppen und ADMIN-only-Allowlist; plan.md WP5a entsprechend nachziehen.
+- ~~ADR für Switcher-Kontext, Sidebar-Gruppen und ADMIN-only-Allowlist~~ → **ADR-0038 (01.10.)**: Switcher ist der
+  Kontext, **Shop in der URL** (`/dashboard/s/:shop/…`, `all` als Wert), Gruppen *Testing* / *Manage*, Allowlisten nur
+  ADMIN in der Service-Schicht. Hebt zugleich die Zurückhaltung der Design-System-Session beim Umhängen der Sidebar
+  auf. plan.md WP5a noch nachzuziehen.
 - Entscheidung Deckungsindex für 1 Mio. Exposures (+238 MB, −40 ms) – Empfehlung: nein.
 - WP6: Retention für `SnippetError`/`Exposure` in `/jobs/cleanup`, Cron `/jobs/daily-stats`; Lasttest auf Render vor WP7.
 - **Attributions-Abdeckung vor WP7 prüfen** (Befund aus der WP4.1-Abnahme, hier aufbewahrt, weil er offen ist): Die
@@ -156,8 +159,6 @@ welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
   Drittanbieter-Apps**; gezielt gegen die Apps testen, die unsere Kunden einsetzen. Ebenso erneut prüfen, dass
   `_ab_v` auf einem **Kunden-Theme** nicht in der Bestätigungsmail und nicht auf der Order-Status-Seite auftaucht –
   am Dev-Store mit Standard-Theme gemessen, nicht aus der Doku belegt.
-- **Shop in der URL?** (`/dashboard/s/<shop>/…`) – der Switcher-Vorschlag lässt das offen. Routing-Entscheidung, die
-  vor WP5a fallen muss, weil sie die Route-Struktur festlegt.
 - WP5b-Blocker, Stand 01.10.: **Tooltip-Popover erledigt** (DESIGN.md §7). **Donut offen** – nicht in Figma, muss
   erst entworfen werden. Weiter offen: volle Verdict-Karte, Leer-/„too few"-Zustände, und die Figma-Statuszeile zeigt
   noch die abgelöste visitor-basierte Sample Size statt der Stopp-Regel (ADR-0036).
@@ -169,12 +170,16 @@ welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
 - **QA vor dem Start geht mit den aktuellen Verträgen nicht:** Force-Links (4.4) wirken nur auf Experimente im
   Metafield, und dort stehen nur `RUNNING` (4.2). Ein `DRAFT` ist also nicht per `?ab_force` prüfbar. Braucht eine
   Entscheidung (z. B. neuer additiver Vertrag für einen QA-Status) bevor der QA-Bereich im Formular Sinn ergibt.
+  **Für WP5a entschieden (Joel, 01.10.): vorerst weglassen** – Force-Links erscheinen nur bei `RUNNING`/`PAUSED`.
+  Die Session baut nichts, das nachweislich nicht funktioniert; der QA-Status wird separat entschieden. Betrifft auch
+  die „Before you start"-Checkliste in `g-draft-zero-data` (WP5b).
 - **Custom Goals – vor der Umsetzung zu klären:** (a) Shopify-Events gibt es nur über eine **App Pixel Extension**
   (`analytics.subscribe`, per Dev-MCP geprüft) – zweite Extension, review-relevant, Sandbox, Visitor-Bindung über
   `browser.cookie` (`_shab_vid`) noch zu prüfen. (b) Klick/Seitenaufruf/`shab.track` kosten Snippet-Budget (8 KB).
   (c) Neue Tabelle für Goal-Events + Retention 12 Monate wie `Exposure`. (d) Stopp-Regel und Rechner für ein Custom
   Goal als Primary. (e) Snapshot (`ExperimentResult`) muss Custom-Goal-Zahlen und -Definition einfrieren.
   (f) DESIGN.md hat kein Modal-Rezept.
-- Formular offen: Hypothese Pflicht? Start-Button im Formular oder nur auf der Detailseite? Tempo-Quelle der
-  Laufzeit-Prognose (letzter Test im Shop passt nicht zu anderem Targeting).
+- ~~Formular offen~~ → entschieden (Joel/Claude, 01.10.): **Hypothese nicht Pflicht** (Disziplin, keine Validierung) ·
+  **Start nur auf der Detailseite**, das Formular endet mit „Save as draft" · die **Tempo-Quelle wird beschriftet**
+  („at the pace of your last test in this shop") statt Exaktheit vorzutäuschen – bei anderem Targeting stimmt sie nicht.
 - Design als Nächstes: Mobile-Liste, Shops-Seite, Formular-Review, Edit-Zustand `RUNNING` (4.6).
