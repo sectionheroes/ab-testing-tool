@@ -1,26 +1,29 @@
 # Status
-Stand: 2026-09-29
+Stand: 2026-10-01
 
 ## Aktuell
-**WP4.1 vollständig abgenommen und gemerged** (PR #5, `d032124`); `main` ist damit wieder vollständig – die vier nie
-gepushten Docs-Commits (plan.md v4.3, ADR-0033–0037, DESIGN.md, CLAUDE.md) sind mit drin. Abnahme a–n **pass**
-(465 Unit-, 73 DB-Tests, A/A 4,98 % / 5,36 %, Snippet 3.647 B gzip). Lasttest: realistisches Volumen (150 k Exposures)
-120–205 ms je Dimension; 1 Mio. verfehlt 500 ms (547–1.124 ms).
-Parallel: Design-Session in Figma für WP5a/5b (Lab Dark). **Nächste Dev-Session: WP5a.**
+**WP5a-Designsystem fertig**, Branch `wp5a-design-system`, PR gegen `main` offen. **Keine Seite gebaut** – diese
+Session hat das Designsystem an Figma angeglichen, damit WP5a und 5b danach Zusammenbau sind und nicht
+Klassen-Abschreiben. 469 Unit-Tests, 73 DB-Tests, typecheck und lint grün.
 
-**Abnahme n (28.09., `sh-ab-testing-one`, Snippet `sh-ab-dev-7`):** Order #1008 über Cart – `_ab` und `_ab_v` als
-Order-Attribut **und** Line-Item-Property. Order #1009 über „Buy it now" – nur Line-Item-Property, keine
-„Additional details"-Karte, weil ohne Cart-Kontakt kein `/cart/update.js` läuft (genau wie 4.1b vorsieht). Zwei private
-Fenster → zwei `_ab_v`, zwei Varianten (a/b). `_ab_v` **in keiner Bestätigungsmail und nicht auf der
-Order-Status-Seite** → ADR-0033 braucht keinen Nachfolger. Gemessen mit Standard-Theme, nicht aus der Doku belegt –
-auf einem Kunden-Theme vor dem Livegang erneut prüfen.
+**Befund, der den Anlass erklärt:** `app/app.css` war noch komplett der **alte** Look (warmes Grau + Mint, Inter),
+während DESIGN.md §2 seit dem 27.09. den Lab-Look beschreibt. Vier Tage lang hat keine Seite so ausgesehen, wie die
+Spec sagt, weil nichts die beiden vergleicht. Jetzt sind sie byte-identisch und ein Test hält sie zusammen
+(`app/design-system.test.ts`).
 
-**Befund Attribution-Abdeckung:** Die zwei Pfade versagen unterschiedlich. Das **Cart-Attribut** übersteht
-Line-Item-Merges (Bundle-Apps, `cartTransform`), fehlt aber bei „Buy Now"; die **Line-Item-Property** deckt Buy Now,
-kann aber bei Bundle- und Ajax-Cart-Apps verlorengehen, die ihr Payload von Hand bauen statt `FormData` zu nehmen.
-**Headless (Hydrogen) ist gar nicht abgedeckt** – Onboarding-Voraussetzung, keine Lücke. Fällt beides aus, greift der
-ADR-0032-Fallback, die Order landet sichtbar in `unknown`. Die **86 % Device-Link-Rate gelten für ein Standard-Theme
-ohne Drittanbieter-Apps**; vor WP7 gezielt gegen die Apps testen, die unsere Kunden einsetzen.
+**Was drin ist:** Lab-Theme in `app/app.css` · fünf neue Tokens in DESIGN.md §2 (`base-400`, `danger-solid`,
+`danger-solid-content`, `success-solid`, dazu `--color-info` im Dark von Lila auf Sky) · §7-Rezepte für die neuen und
+geänderten Komponenten · React-Komponenten unter `app/components/` (Button mit **sieben** Stilen, IconButton, Badge,
+VariantKey, Tooltip, Progress, Chip, Pagination, Dropdown-Trigger, SearchInput, Tab, Segmented, Table-Zellen,
+ShopSwitcher, Checkbox/Radio/Input, MobileTopBar, 36 Icons) · **`/dashboard/styleguide`** (nur Development) zeigt
+alles in jeder Variante in beiden Themes.
+
+**Drei Lücken aus ADR-0037 sind zu:** das gestylte **Tooltip-Popover** (ersetzt das native `title`, das sich nicht
+stylen ließ und auf Touch nicht funktionierte), die **Primärmetrik-Spalte** in den Tabellenzellen und der
+**Progress-Balken** der Stopp-Regel. **Der Donut fehlt weiter** – er steht nicht in Figma und muss erst entworfen
+werden; vorher kann DESIGN.md ihn nicht beschreiben.
+
+**Abnahme a–n von WP4.1 bleibt pass** (PR #5, `d032124`); Lasttest realistisch 120–205 ms, 1 Mio. 547–1.124 ms.
 
 ## Design-Entscheidungen (28.09., Figma – noch nicht in plan.md/ADR)
 - **Shop-Switcher oben in der Sidebar = Kontext für alle Testing-Seiten** (Experiments, Reconciliation, Results).
@@ -59,6 +62,28 @@ ohne Drittanbieter-Apps**; vor WP7 gezielt gegen die Apps testen, die unsere Kun
   additiv zu 4.5), siehe Offen.
 - **Figma:** Alle geteilten UI-Teile sind Komponenten auf „Foundations" (Sidebar, ShopSwitcher, Button, Badge, Icons,
   Table-Zellen …); Frames nutzen nur Instanzen. Noch alt: MobileTopBar, Checkbox/Radio/Input.
+- **Übertragung nach Code (01.10., WP5a):** Figma arbeitet ohne Variablen, jeder Wert ist rohes Hex. Übertragen heißt
+  deshalb **abbilden, nicht abschreiben** – die Regel steht jetzt in DESIGN.md §9 samt Grauton-Tabelle, und zwei
+  Tests halten sie (`app/design-system.test.ts`: kein Hex und keine `slate-*`/`emerald-*`-Klasse in `className`).
+  **Vom Designer zu bestätigen:** (a) das **Tooltip-Popover** – Figma hat nur den Trigger, das Popover ist aus den
+  §2-Tokens entworfen; (b) **Checkbox, Radio, Input, MobileTopBar** – in Figma als veraltet markiert, deshalb nicht
+  abgezeichnet, sondern aus dem aktuellen Token-Satz gebaut; (c) alle **Light-Werte** der neuen Tokens, denn Figma
+  zeichnet nur Dark.
+- **Bewusste Abweichungen von Figma** (jede mit Grund, nachzusehen in `/dashboard/styleguide`):
+  1. **Icons** als Lucide-Strichpfade mit 24er-Viewbox statt der Figma-Exporte. Die Exporte sind flachgerechnete
+     Outlines mit 16er-Viewbox, nehmen kein `currentColor` an und liegen auf URLs, die nach sieben Tagen ablaufen.
+     Die Figma-Icons *sind* Lucide, bei 16px ergibt `strokeWidth 2` genau 1,33px – dasselbe Bild.
+  2. **Grautöne über Opacity** (`text-base-content/60`) statt der Slate-Hexes. Das verlangt DESIGN.md §4; es kostet
+     etwas Blaustich.
+  3. **Badge-Flächen** als `bg-success/20` usw. statt Figmas -500-Tönen bei 20 %. Unterschied unter der
+     Wahrnehmungsschwelle, spart vier Tokens.
+  4. **`--color-info` im Dark von Lila auf Sky** – Figma färbt den „ended"-Badge Sky; Lila bleibt `secondary` und
+     damit dem Plan-/Feature-Label vorbehalten (§4).
+  5. **Favicon-Farben im ShopSwitcher** aus der Domain abgeleitet statt fix pro Shop. Eine `Shop.color`-Spalte für
+     eine Dekoration wäre die falsche Art von dauerhaft.
+  6. **Sidebar-Gruppierung unverändert** (Testing: Shops/Experiments/Reconciliation · Admin: Users). Figmas
+     Testing/Manage-Schnitt ist eine IA-Entscheidung, die unten als offen steht und ein ADR braucht – restylen ja,
+     umhängen nein.
 
 ## Design-Entscheidungen (01.10., Figma gelesen – Experiments, Results, Experiment-Formular)
 
@@ -124,8 +149,11 @@ welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
 - WP6: Retention für `SnippetError`/`Exposure` in `/jobs/cleanup`, Cron `/jobs/daily-stats`; Lasttest auf Render vor WP7.
 - **Shop in der URL?** (`/dashboard/s/<shop>/…`) – der Switcher-Vorschlag lässt das offen. Routing-Entscheidung, die
   vor WP5a fallen muss, weil sie die Route-Struktur festlegt.
-- WP5b-Blocker: Donut-Rezept und gestyltes Tooltip-Popover in DESIGN.md, volle Verdict-Karte, Leer-/„too few"-Zustände,
-  Figma-Statuszeile zeigt noch die abgelöste visitor-basierte Sample Size statt der Stopp-Regel (ADR-0036).
+- WP5b-Blocker, Stand 01.10.: **Tooltip-Popover erledigt** (DESIGN.md §7). **Donut offen** – nicht in Figma, muss
+  erst entworfen werden. Weiter offen: volle Verdict-Karte, Leer-/„too few"-Zustände, und die Figma-Statuszeile zeigt
+  noch die abgelöste visitor-basierte Sample Size statt der Stopp-Regel (ADR-0036).
+- **Modal-Rezept** fehlt in DESIGN.md – gebraucht für „Add goal" (Custom Goals) und den Stop-Dialog (WP5b).
+- **Logo:** die Shell zeigt weiter die Text-Wortmarke; die PNGs aus DESIGN.md §4 liegen nicht im Repo.
 - WP-R: Distribution Method auf `sh-ab` prüfen (Public, irreversibel) → PCD Level 1 + `read_all_orders` → Listing.
   PCD wird **durch** das App Review freigegeben, das Listing liegt damit auf dem kritischen Pfad. Vor dem Einreichen
   „Limit visibility" setzen.

@@ -16,7 +16,10 @@ export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
   const embedded = isEmbedded(useLocation().pathname);
   return (
-    <html lang="en">
+    // suppressHydrationWarning: THEME_SCRIPT sets data-theme before React hydrates, which is the whole point of it
+    // (DESIGN.md §3, avoid the flash). Without this React logs an "extra attributes from the server" warning for an
+    // attribute we put there deliberately.
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* App Bridge must be the first script in <head> on embedded pages (App Store req. 1.1.1 / 2.2.3).
             Polaris web components (<s-*>) come from the separate polaris.js script (ADR-0029). */}
@@ -24,14 +27,17 @@ export default function App() {
         {embedded && <script src="https://cdn.shopify.com/shopifycloud/polaris.js" />}
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        {/* DESIGN.md §2/§3 (dashboard + login only): Inter from Google Fonts, theme attribute set before the stylesheet paints.
-            /app/* is Polaris-only – no Tailwind/daisyUI, no theme script. */}
+        {/* DESIGN.md §2/§3 (dashboard + login only): Geist + Geist Mono from Google Fonts, theme attribute set before
+            the stylesheet paints. /app/* is Polaris-only – no Tailwind/daisyUI, no theme script. */}
         {!embedded && (
           <>
             <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
             <link rel="preconnect" href="https://fonts.googleapis.com" />
             <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+            <link
+              rel="stylesheet"
+              href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+            />
             <link rel="stylesheet" href={appStylesHref} />
           </>
         )}
