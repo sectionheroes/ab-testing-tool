@@ -60,6 +60,61 @@ ohne Drittanbieter-Apps**; vor WP7 gezielt gegen die Apps testen, die unsere Kun
 - **Figma:** Alle geteilten UI-Teile sind Komponenten auf „Foundations" (Sidebar, ShopSwitcher, Button, Badge, Icons,
   Table-Zellen …); Frames nutzen nur Instanzen. Noch alt: MobileTopBar, Checkbox/Radio/Input.
 
+## Design-Entscheidungen (01.10., Figma gelesen – Experiments, Results, Experiment-Formular)
+
+Gelesen wurden die Figma-Seiten **Experiments** (2-21), **Results** (2-20) und **Experiment form** (2-22), jeweils die
+Struktur, nicht jedes Pixel. Noch nicht in plan.md/ADR eingearbeitet.
+
+**⚠️ Scope-Konflikt: Das Formular setzt Custom Goals voraus.** Die Karte „Goals" hat ein *Primary*-Select und
+*„Also measured"*-Pills, ein Modal „Add goal" wählt aus **shop-weiten** Goals (Add to cart · Size guide opened ·
+Reached cart page · Checkout started · Quiz completed · Reviews tab clicked), ein Modal „New goal" legt neue an, mit
+den Typen *page view* (URL-Regel), *Shopify event*, *custom event from code* und *Klick (Selektor)*. State 8 zeigt ein
+Custom Goal als Primärmetrik. **Das ist exakt der Umfang, der am 01.10. in plan.md §9 als Phase 2 festgehalten wurde**
+(`Metric` ist heute ein Enum `CR | RPV | AOV`, Vertrag 4.8 kennt nur Order-Conversions). Entweder zieht Phase 1 die
+Custom Goals mit hoch – neuer Vertrag, neue Tabelle `GoalEvent`, Proxy-Route, Snippet-Arbeit, Web-Pixel-Extension für
+Shopify-Events – oder das Formular wird ohne die Goals-Karte gebaut. **Entscheidung Joel, blockiert WP5a.**
+
+**Zweite Modelländerung: „Also measured".** Heute zeigt der Report immer alle drei Metriken; im Entwurf wählt man aus,
+welche mitgemessen werden. Das ist ein Feld am Experiment, das es nicht gibt.
+
+**Experiments-Liste** (ergänzt die Einträge vom 28.09.)
+- Sortierung **Running → Paused → Draft → Ended**; Zeilenklick öffnet Results.
+- Der Shop steht als **Unterzeile in der Experiment-Zelle**, nicht in einer eigenen Spalte.
+- Toolbar nur **Status-Tabs + Suche** – keine Filter-Chips, kein Spalten-Dropdown. Schlanker als plan.md WP5a.
+- Result-Spalte: Running = Fortschrittsbalken (schwächerer Arm) + % + „est. <Datum>"; SRM = „Assignment broken" +
+  Tooltip + „No verdict"; **Paused = Fortschritt + „not collecting while paused"**; Draft und Ended ohne Fortschritt.
+- Der ShopSwitcher führt die **Zahl der Experimente je Shop**.
+
+**Results** – sieben Overview-Zustände, fünf Tabs, vier Dialoge, Mobile durchgezeichnet.
+- Zustände: `a-running-not-conclusive` · `b-rule-met-winner` · `c-rule-met-no-difference` · `d-srm-alarm` ·
+  `e-guardrail-warning` · `f-ended-frozen` · `g-draft-zero-data`. Damit sind die in plan.md v4.3 offenen Leer- und
+  „too few"-Zustände **erledigt**.
+- **SRM schaltet das Urteil dauerhaft ab** – Alert oben, Tabelle gedimmt als „debugging only", Stop wird zu
+  „Stop as invalid…". In plan.md ist SRM nur ein Badge in den Checks. **Funktionsänderung bis in die Service-Schicht.**
+- `g-draft-zero-data`: „Before you start"-Checkliste (Hypothesis · Variant B code · Stopping rule · QA on the live
+  store) mit Force-Links, leere Performance, einziger Primary-Button „Start…". In plan.md gar nicht vorgesehen.
+- Dialoge Start · Pause · Stop-with-verdict · **Stop-early** („warns, never blocks, **offers Pause instead**", mobil
+  als Bottom Sheet). Das Pause-Angebot ist neu.
+- Blockreihenfolge bestätigt ADR-0037: performance → verdict-status/card → checks+distribution → setup+history.
+  Die Performance-Tabelle scrollt horizontal mit **sticky Variant-Spalte**.
+- Checks sind benannt: Assignment (SRM) · Guardrail · Bot traffic · Code edits while running · Tainted days.
+- **Abweichungen von Vertrag 4.9:** Charts stehen per Default auf **Cumulative** (4.9 sagt das nur für Improvement),
+  und ein **Edit-Marker erscheint im Chart** (plan.md hat ihn in den Checks).
+- `tab-goals · table + chart (variant B)` existiert als Frame – widerspricht weiter ADR-0037 („Goals = nur Charts").
+
+**Experiment-Formular** – zwei Spalten, rechts sticky die Karte „When is it decided".
+- Elf durchgezeichnete Zustände, u. a.: Shop-Select nur wenn aus „All shops" geöffnet (1) · Selektorfeld erscheint
+  beim Trigger „scrolls into view" (2) · **AOV als Primärmetrik erzeugt die Warnung aus 4.8** (3) · Inline-Validierung
+  bei vergebenem Key (4) · **erster Test eines Shops → Baseline wird eingegeben statt abgeleitet** (5) · **Prognose
+  über 6 Wochen → amber**, die Futility-Warnung aus ADR-0036 (6) · eigene Rechnung für RPV (7).
+- Die Stopp-Regel bleibt im Entwurf **zwei Felder** (Conversions + „Minimum runtime" in Tagen); der Vorschlag, sie zu
+  `minFullWeeks` zusammenzuziehen, ist nicht eingearbeitet.
+- **Vermutlicher Entwurfsfehler:** „As soon as the page loads" und „When an element scrolls into view" sind als
+  **Checkboxen** gezeichnet. Der Trigger ist laut Datenmodell exklusiv (`immediate` | `visible`), das müssen Radios
+  sein. Nur „Hide the page until the variant is ready" ist eine echte Checkbox.
+- In der Sidebar steht neben der Benutzer-Mail die Stopp-Regel („1.000 conversions per arm · 14 days · full weeks") –
+  sieht nach einem **globalen Default** aus. Ort der Regel (global / pro Shop / pro Experiment) ist zu bestätigen.
+
 ## Offen
 - ADR für Switcher-Kontext, Sidebar-Gruppen und ADMIN-only-Allowlist; plan.md WP5a entsprechend nachziehen.
 - Entscheidung Deckungsindex für 1 Mio. Exposures (+238 MB, −40 ms) – Empfehlung: nein.
