@@ -71,13 +71,11 @@ ihn gibt; die in WP5a dazugekommenen sind im Light Mode **provisorisch und nicht
 | `danger-solid-content` *(neu 01.10.)* | `#ffffff` | `#ffffff` | Schrift darauf |
 | `success-solid` *(neu 01.10.)* | `#10b981` emerald-500 | `#23884a` | Der **gefüllte** Progress-Balken. Bei voller Deckkraft ist der Unterschied zu `success` (emerald-400) sichtbar, bei 20 % nicht – deshalb nur hier ein eigener Wert |
 | `nav-active` / `-bg` / `-line` | Emerald-Satz | alter Look | Aktiver Nav-Eintrag (§6) |
-| `scrim` *(neu 01.10., **noch nicht im CSS-Block**)* | `rgb(2 6 23 / 0.72)` slate-950 @ 72 % | `rgb(28 27 27 / 0.45)` | Fläche hinter jedem Modal (§7 „Modal"). Dunkelt in **beiden** Themes ab – `bg-base-100/70` würde im Light Mode aufhellen, `bg-black` verbietet §9 |
-| `control-checked` / `-content` *(neu 01.10., **noch nicht im CSS-Block**)* | `#f8fafc` / `#0f172a` (= primary) | `#1c1b1b` / `#ffffff` | Fläche/Haken einer **gesetzten** Checkbox und Ring/Punkt eines gesetzten Radios. Im Light Mode ist Primary Mint, und Mint auf Weiß ist als „an" kaum von „aus" zu unterscheiden |
+| `scrim` *(neu 01.10.)* | `rgb(2 6 23 / 0.72)` slate-950 @ 72 % | `rgb(28 27 27 / 0.45)` | Fläche hinter jedem Modal (§7 „Modal"). Dunkelt in **beiden** Themes ab – `bg-base-100/70` würde im Light Mode aufhellen, `bg-black` verbietet §9 |
+| `control-checked` / `-content` *(neu 01.10.)* | `#f8fafc` / `#0f172a` (= primary) | `#1c1b1b` / `#ffffff` | Fläche/Haken einer **gesetzten** Checkbox und Ring/Punkt eines gesetzten Radios. Im Light Mode ist Primary Mint, und Mint auf Weiß ist als „an" kaum von „aus" zu unterscheiden |
 
-> Die zwei Zeilen mit „noch nicht im CSS-Block" kommen in **demselben Commit** in den §2-CSS-Block und nach
-> `app/app.css` (als `--sh-scrim` / `--sh-control-checked*` plus `@theme`-Zeile) – `app/design-system.test.ts` hält
-> beide byte-gleich. Die Design-Session hat sie bewusst nur hier eingetragen, um der parallel laufenden
-> WP5a-Session nicht in `app.css` zu greifen.
+> Beide stehen seit 02.10. als `--sh-scrim` / `--sh-control-checked*` im §2-CSS-Block **und** in `app/app.css`,
+> samt `@theme`-Zeile – `app/design-system.test.ts` hält beide byte-gleich.
 
 **`--color-info` ist im Dark Mode seit 01.10. Sky statt Lila** (`#7dd3fc`, Fläche `bg-info/20`). Figma nutzt es für
 den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label vorbehalten (§4).
@@ -182,6 +180,9 @@ den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label v
   --sh-nav-active: #1c1b1b;                                      /* Text aktiver Nav-Eintrag */
   --sh-nav-active-bg: color-mix(in oklab, #1c1b1b 10%, transparent);
   --sh-nav-active-line: transparent;                             /* 2px-Linie links */
+  --sh-scrim: rgb(28 27 27 / 0.45);                              /* Fläche hinter jedem Modal */
+  --sh-control-checked: #1c1b1b;                                 /* gesetzte Checkbox / gesetztes Radio */
+  --sh-control-checked-content: #ffffff;
 }
 [data-theme="dark"] {
   --sh-border-strong: #475569;                                   /* slate-600 */
@@ -192,6 +193,9 @@ den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label v
   --sh-nav-active: #34d399;                                      /* emerald-400 */
   --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent); /* emerald-950/50 */
   --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent); /* emerald-500/60 */
+  --sh-scrim: rgb(2 6 23 / 0.72);                                /* slate-950 @ 72 % */
+  --sh-control-checked: #f8fafc;                                 /* = primary im Dark */
+  --sh-control-checked-content: #0f172a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -203,6 +207,9 @@ den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label v
     --sh-nav-active: #34d399;
     --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent);
     --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent);
+    --sh-scrim: rgb(2 6 23 / 0.72);
+    --sh-control-checked: #f8fafc;
+    --sh-control-checked-content: #0f172a;
   }
 }
 
@@ -217,6 +224,9 @@ den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label v
   --color-nav-active: var(--sh-nav-active);
   --color-nav-active-bg: var(--sh-nav-active-bg);
   --color-nav-active-line: var(--sh-nav-active-line);
+  --color-scrim: var(--sh-scrim);
+  --color-control-checked: var(--sh-control-checked);
+  --color-control-checked-content: var(--sh-control-checked-content);
 }
 
 @layer base {
@@ -679,27 +689,27 @@ wäre die falsche Art von dauerhaft.
 
 ### Formularfelder (Checkbox · Radio · Input)
 **Komponente: `app/components/Form.tsx`** (Figma 8:94 · 8:102 · 8:123). **Vom Designer geprüft (01.10.)** – in Figma
-nicht mehr „veraltet", sondern aktuell (Beschreibung an den Komponenten). Zwei Korrekturen am Code, eine Bestätigung:
+nicht mehr „veraltet", sondern aktuell (Beschreibung an den Komponenten). Die zwei Korrekturen sind seit 02.10. im
+Code:
 
 - **Input liegt vertieft**: `bg-base-100` statt `bg-base-200`. Auf einer Card (`base-200`) verschwindet ein
   `base-200`-Feld sonst bis auf den Rand; alle Formulare in Figma (Experiment form, Stop-Dialog) zeichnen es so.
-  Rand `border-base-content/20` (≈ `border-strong`, darf so bleiben), Höhe **40 px** (`md`) bzw. 32 px (`sm`) – der
-  Code hat 38 px. Dasselbe gilt für **Textarea** und **Select**.
-- **Gesetzte Checkbox / gesetztes Radio** über das neue Token `control-checked` (§2) statt `primary`. Im Dark Mode
-  ändert sich nichts (= primary); im Light Mode ist Mint-auf-Weiß als „an" kaum von „aus" zu unterscheiden – im
-  Styleguide gut zu sehen, das gesetzte Radio ist dort fast unsichtbar.
+  Rand `border-base-content/20` (≈ `border-strong`, darf so bleiben), Höhe **40 px** (`md`, `h-10`) bzw. 32 px
+  (`sm`, `h-8`). Dasselbe gilt für **Textarea** und **Select**; die Textarea wächst mit dem Inhalt und hat deshalb
+  keine feste Höhe.
+- **Gesetzte Checkbox / gesetztes Radio** über das Token `control-checked` (§2) statt `primary`. Im Dark Mode
+  ändert sich nichts (= primary); im Light Mode ist Mint-auf-Weiß als „an" kaum von „aus" zu unterscheiden.
 - Checkbox, Radio und `locked` stimmen sonst mit Figma überein.
 
 `locked` ist der Zustand aus Vertrag 4.6 (Targeting, Allocation, Weights, Salt bei `RUNNING` gesperrt): gerendert als
 disabled mit Schloss und Erklärung. Die eigentliche Sperre liegt im Service-Layer, nicht in einer CSS-Klasse.
 
-**Fehlertexte für Laien:** Der Styleguide zeigt „Allocation must be between 0 and 1." – im UI ist Allocation ein
-Prozentwert, der Text muss es auch sein („Between 1 and 100 %"). Zahlen in Feldern ebenfalls `de-DE` („1.000", nicht
-„1000").
+**Fehlertexte für Laien:** Allocation ist im UI ein Prozentwert, der Text muss es auch sein („… has to be between
+1 and 100 %"), Zahlen in Feldern `de-DE` („1.000", nicht „1000"). Beides ist im Styleguide korrigiert.
 
-**MobileTopBar** (Figma 8:249, bestätigt 01.10.): Logo + Wortmarke links, Menü-Button rechts, **kein Seitentitel** –
-der steht direkt darunter im Page-Header. Der Code hat Menü links + Seitentitel; bitte an Figma angleichen
-(`h-14 border-b border-base-300 bg-base-100 px-4`).
+**MobileTopBar** (Figma 8:249, bestätigt 01.10., im Code seit 02.10.): Logo + Wortmarke links, Menü-Button rechts,
+**kein Seitentitel** – der steht direkt darunter im Page-Header. `h-14 border-b border-base-300 bg-base-100 px-4`,
+die Wortmarke kommt als `Wordmark` aus `Shell.tsx`, damit Sidebar und Mobile-Bar nicht auseinanderlaufen.
 
 ### Icons
 **`app/components/icons.tsx`** – 36 Icons, Inline-SVG, 24er-Viewbox, `stroke="currentColor"`, `strokeWidth={2}`,

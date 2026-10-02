@@ -1,9 +1,10 @@
 /**
  * Form controls — Figma `Checkbox` (8:94), `Radio` (8:102) and `Input` (8:123).
  *
- * **These four are flagged OUTDATED in STATUS.md** (they predate the lab-dark set), so they are deliberately *not*
- * transcribed from Figma. They are built from the current §2 token set so they sit next to the lab components
- * without clashing, and they are listed in STATUS.md as to be confirmed by the designer. The variants are the ones
+ * **Confirmed by the designer on 01.10.** (DESIGN.md §7 "Formularfelder"), with three corrections applied: the
+ * field surface is `bg-base-100` rather than `bg-base-200` — on a `base-200` card a `base-200` field disappears
+ * except for its border — the `md` height is 40 px and `sm` 32 px, and a *set* checkbox/radio uses the `control-checked`
+ * token instead of `primary`, because in light mode Mint on white barely reads as "on". The variants are the ones
  * Figma names: Checkbox/Radio on · off · disabled-on · disabled-off, Input md/sm × default · locked · error.
  *
  * `locked` is the contract-4.6 state: targeting, allocation, weights and salt cannot be edited while an experiment
@@ -26,8 +27,8 @@ export function Checkbox({
   return (
     <label className={["inline-flex items-center gap-2 text-sm", disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer", className].join(" ")}>
       <span className="relative inline-flex size-4 shrink-0">
-        <input type="checkbox" disabled={disabled} className="peer size-4 appearance-none rounded border border-border-strong bg-base-200 transition-colors checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/40" {...rest} />
-        <Check size={12} className="pointer-events-none absolute left-0.5 top-0.5 hidden text-primary-content peer-checked:block" />
+        <input type="checkbox" disabled={disabled} className="peer size-4 appearance-none rounded border border-border-strong bg-base-100 transition-colors checked:border-control-checked checked:bg-control-checked focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/40" {...rest} />
+        <Check size={12} className="pointer-events-none absolute left-0.5 top-0.5 hidden text-control-checked-content peer-checked:block" />
       </span>
       <span>{label}</span>
     </label>
@@ -45,8 +46,8 @@ export function Radio({
   return (
     <label className={["inline-flex items-center gap-2 text-sm", disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer", className].join(" ")}>
       <span className="relative inline-flex size-4 shrink-0">
-        <input type="radio" disabled={disabled} className="peer size-4 appearance-none rounded-full border border-border-strong bg-base-200 transition-colors checked:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/40" {...rest} />
-        <span className="pointer-events-none absolute left-1 top-1 hidden size-2 rounded-full bg-primary peer-checked:block" />
+        <input type="radio" disabled={disabled} className="peer size-4 appearance-none rounded-full border border-border-strong bg-base-100 transition-colors checked:border-control-checked focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/40" {...rest} />
+        <span className="pointer-events-none absolute left-1 top-1 hidden size-2 rounded-full bg-control-checked peer-checked:block" />
       </span>
       <span>{label}</span>
     </label>
@@ -87,11 +88,11 @@ export function Input({
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={[
-            "w-full rounded-lg border bg-base-200 text-base-content outline-none transition-colors",
+            "w-full rounded-lg border bg-base-100 text-base-content outline-none transition-colors",
             "placeholder:text-base-content/40",
             "focus:border-base-content/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/40",
             "disabled:cursor-not-allowed disabled:bg-base-300/40 disabled:text-base-content/50",
-            size === "sm" ? "px-2.5 py-1.5 text-[13px]" : "px-3 py-2 text-sm",
+            size === "sm" ? "h-8 px-2.5 text-[13px]" : "h-10 px-3 text-sm",
             locked ? "pr-8" : "",
             mono ? "font-mono" : "",
             error ? "border-error" : "border-border-strong",
@@ -154,10 +155,10 @@ export function Select({
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={[
-            "w-full appearance-none rounded-lg border bg-base-200 pr-9 text-base-content outline-none transition-colors",
+            "w-full appearance-none rounded-lg border bg-base-100 pr-9 text-base-content outline-none transition-colors",
             "focus:border-base-content/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/40",
             "disabled:cursor-not-allowed disabled:bg-base-300/40 disabled:text-base-content/50",
-            size === "sm" ? "py-1.5 pl-2.5 text-[13px]" : "py-2 pl-3 text-sm",
+            size === "sm" ? "h-8 pl-2.5 text-[13px]" : "h-10 pl-3 text-sm",
             error ? "border-error" : "border-border-strong",
           ].join(" ")}
           {...rest}
@@ -208,7 +209,7 @@ export function Textarea({
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={[
-          "w-full rounded-lg border bg-base-200 px-3 py-2 text-sm leading-relaxed text-base-content outline-none transition-colors",
+          "w-full rounded-lg border bg-base-100 px-3 py-2 text-sm leading-relaxed text-base-content outline-none transition-colors",
           "placeholder:text-base-content/40",
           "focus:border-base-content/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/40",
           "disabled:cursor-not-allowed disabled:bg-base-300/40 disabled:text-base-content/50",

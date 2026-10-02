@@ -253,7 +253,7 @@ export default function Styleguide() {
         </div>
       </Section>
 
-      <Section title="Form controls" note="Figma 8:94 / 8:102 / 8:123 are flagged OUTDATED — these are built from the current token set and need the designer's confirmation.">
+      <Section title="Form controls" note="Figma 8:94 / 8:102 / 8:123, confirmed by the designer on 01.10.: recessed surface (bg-base-100), 40 px / 32 px, and a set checkbox/radio on the control-checked token.">
         <Row label="checkbox">
           <Checkbox label="Mobile" checked={checks.a} onChange={(e) => setChecks((c) => ({ ...c, a: e.currentTarget.checked }))} />
           <Checkbox label="Desktop" checked={checks.b} onChange={(e) => setChecks((c) => ({ ...c, b: e.currentTarget.checked }))} />
@@ -326,9 +326,9 @@ export default function Styleguide() {
         </div>
       </Section>
 
-      <Section title="MobileTopBar" note="Figma 8:249 is flagged OUTDATED — built from the current token set, to be confirmed.">
+      <Section title="MobileTopBar" note="Figma 8:249, confirmed by the designer on 01.10.: wordmark left, menu right, no page title — the title sits in the page header right below.">
         <div className="max-w-sm overflow-hidden rounded-box border border-base-300">
-          <MobileTopBar title="Experiments" />
+          <MobileTopBar />
         </div>
       </Section>
 

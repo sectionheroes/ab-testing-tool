@@ -175,7 +175,7 @@ export function Shell({
 }
 
 /** Text wordmark until the logo PNGs from DESIGN.md §4 are in the repo. Figma: outlined box + wordmark + "AB" badge. */
-function Wordmark() {
+export function Wordmark() {
   return (
     <>
       <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-md border border-base-content text-[11px] font-bold">
