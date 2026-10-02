@@ -1,6 +1,8 @@
-# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v4.3)
+# Implementierungsplan – A/B-Testing-Tool, Phase 1 (v4.4)
 
 *Stand: 18.09.2026, v2 nach Joels Feedback. Baut auf dem Konzept-Doc auf (gleicher Ordner). UI-Design nach `DESIGN.md` (gleicher Ordner – ins Repo kopieren). Ziel: Das MVP so in Arbeitspakete schneiden, dass Claude Code jedes Paket in ein bis drei Sessions umsetzen kann, mit klaren Abnahmekriterien, und dass die Basis für Preis-/Versandtests (Phase 3) schon drin ist.*
+
+**v4.4 (02.10., nach WP5a):** §5a auf den gebauten Stand nachgezogen – inhaltlich sind das die Design-Entscheidungen aus STATUS.md (28.09./01.10.) und **ADR-0038**. Kein Vertrag in §4 berührt. Im Einzelnen: Navigation mit **Shop in der URL** (`/dashboard/s/:shop/…`, `all` als Wert), Shop-Switcher als Kontext, Sidebar-Gruppen *Testing* / *Manage*, Allowlisten nur ADMIN · Experiments-Liste mit **Status-Tabs + Suche** statt Filter-Chips, Spalte **Conversions** und **Result** (Stopp-Regel-Fortschritt bzw. Urteil) statt der abgelösten Sample-Size-Spalte · Sample-Size-Rechner **nur noch einwegs** (MDE ist abgeleitet, keine Eingabe) und die Stopp-Regel-Karte mit genau **zwei** Eingaben (Conversions pro Arm, Mindestlaufzeit in vollen Wochen → `minDurationDays = 7·n`, `requireFullWeeks = true`) · **keine Goals-Karte**, Primärmetrik bleibt das Drei-Werte-Select `CR | RPV | AOV` (Custom Goals sind Phase 2, §9) · **kein QA-Bereich im DRAFT**: Force-Links (4.4) wirken nur auf Experimente im Metafield, und dort stehen nur `RUNNING` (4.2) – ein DRAFT ist damit nicht per `?ab_force` prüfbar, der QA-Status wird separat entschieden · Start liegt auf der Detailseite, das Formular endet mit „Save as draft". **Der Stop-Dialog fehlt weiterhin** (gehört zu 5b); bis dahin läuft Stop über die Service-Schicht (`pnpm experiment:status`). Dazu §5b nachgezogen, **ohne Vertragsänderung**: die vier Blocker von v4.3 sind erledigt (Donut-, Modal- und Tooltip-Rezept in DESIGN.md §7, Statuszeile auf ADR-0036 und „Evaluable on"), die sieben Overview-Zustände a–g sind gezeichnet, Dialoge als RadioCards + Bottom Sheet mit aktivem Pause-Angebot, Charts per UI-Default auf Cumulative. Neu entschieden (Joel, 02.10.) und **noch ohne ADR**: **SRM schaltet p-Wert, Winner und `significant` in der Service-Schicht ab**, während die Tabelle vollständig und ungedimmt sichtbar bleibt.
 
 **v4.3 (27.09., nach dem Design-Review):** WP5b nach dem gezeichneten Entwurf überarbeitet (ADR-0037, kein Vertrag geändert). Overview jetzt: **Performance-Tabelle → schmale Verdict-Statuszeile → Distribution/Setup → Checks/History**. Eine Gesamttabelle über alle Goals statt nur der Primärmetrik; der Goals-Tab behält nur die Charts. Keine CI-Spalte vor erfüllter Stopp-Regel, Lifts bis dahin neutral grau. Header ohne Key und Shop-Domain, dafür mit Edit. Kein Auto-Polling mehr – Refresh-Button und Tab-Fokus. Tooltips stark reduziert nach der neuen **DESIGN.md §10 „Content-Regeln"**. **Offen und blockierend für 5b:** das Designsystem (Figma-Lab-Dark mit Hex vs. DESIGN.md/daisyUI mit Mint), zwei fehlende DESIGN.md-Rezepte (Donut, gestyltes Tooltip-Popover) und der Widerspruch, dass die gezeichnete Statuszeile noch die abgelöste visitor-basierte `plannedSampleSize` zeigt statt der Stopp-Regel aus ADR-0036.
 
@@ -879,24 +881,66 @@ Editor · **5b** Results · **5c** API und CLI.
 
 #### 5a – Shops, Users, Experiments, Editor
 
-- **Shops**: Liste aller Shops (`ALLOWLISTED` / `PENDING` / `ACTIVE` / `UNINSTALLED`) mit laufenden Tests und letztem Reconciliation-Status; Domain allowlisten, `PENDING` freischalten (aus WP1 hierher verschoben und ordentlich gemacht)
+**Gebaut am 02.10.** (Branch `wp5a-dashboard`). Dieser Abschnitt beschreibt den gebauten Stand; die Abweichungen
+gegenüber v4.3 sind oben im v4.4-Eintrag aufgezählt und stammen aus den Design-Sessions (STATUS.md) und ADR-0038.
+
+- **Navigation (ADR-0038)**: der **Shop steht in der URL** (`/dashboard/s/:shop/…`, `all` ist ein gültiger Wert), der
+  Shop-Switcher oben in der Sidebar ist der Kontext für alle Testing-Seiten und führt die Zahl der Experimente je
+  Shop. Sidebar-Gruppen *Testing* (Experiments, Reconciliation – folgen dem Switcher) und *Manage* (Shops für
+  ADMIN+MEMBER, Users nur ADMIN – immer global). Alte Links leiten um; `localStorage` entscheidet nur die
+  Landing-Route, nie den Inhalt einer Seite
+- **Shops**: Liste aller Shops (`ALLOWLISTED` / `PENDING` / `ACTIVE` / `UNINSTALLED`) mit laufenden Tests und letztem Reconciliation-Status; Domain allowlisten, `PENDING` freischalten (aus WP1 hierher verschoben und ordentlich gemacht). **Allowlisten und Freischalten sind ADMIN-only**, geprüft in der Service-Schicht (ADR-0038)
 - **Users** (nur ADMIN): einladen per E-Mail mit Rolle; `CLIENT` bekommt Shop-Zuordnung. Die Client-Ansicht selbst ist Phase 2 – in Phase 1 landet ein `CLIENT` nach Login auf einer "Nothing here yet"-Seite
-- **Experiments** (pro Shop und global): Tabelle mit Status, Laufzeit, Sample-Size-Fortschritt, SRM-Badge; Filter/Sort/Pagination clientseitig wie in DESIGN.md
-- **Experiment erstellen / bearbeiten** – ein Formular:
-  - Basis: key (auto aus name, editierbar bis zum ersten Start), name, hypothesis, primaryMetric
-  - **Stopp-Regel** (ADR-0036): min. Conversions pro Arm (Default 1.000), min. Laufzeit in Tagen (Default 14), volle Wochen (Default an). Bei `RUNNING` nur verschärfbar (4.6)
-  - **Sample-Size-Rechner** daneben, beidseitig: MDE eingeben → Conversions und Visitors, oder Conversions eingeben → impliziter MDE ("1.000 conversions per arm ≈ detects a +12.5 % relative lift at 80 % power"). Für RPV getrennt ausgewiesen. Baseline-CR auf drei Wegen: (1) aus einem früheren Experiment desselben Shops, falls vorhanden – dann exakt und ohne Eingabe; (2) du trägst die Besucherzahl der letzten 30 Tage ein, die Orders holen wir selbst (`rpvPlanningInputs`); (3) manueller Override der Baseline-CR. AOV und dessen Streuung kommen immer aus unseren eigenen Orders
-  - **Laufzeit-Prognose** beim Anlegen: "at your current pace: ~5 weeks". Über 6 Wochen als Warnung, mit dem Hinweis, den MDE hochzusetzen. Beim ersten Test eines Shops fehlt das Tempo – dann bleibt das Feld leer statt zu raten
-  - Targeting: URL-Regel (exact/contains/regex), Device-Checkboxen; Trigger (immediate / visible + selector); hideUntilApplied
-  - Allocation, Varianten mit Weights
-  - **Pro Variante: JS-Feld und CSS-Feld als CodeMirror-6-Editor** (Syntax-Highlighting, Zeilennummern, Dark/Light nach Theme), Control hat keine Felder
-  - Unsaved-Bar, Save/Discard, Inline-Validierung (Weights = 1.0, key unique, Regex kompiliert)
-  - Editing-Regel nach 4.6 inkl. Warnung bei `RUNNING`
-  - QA-Bereich: Force-Links pro Variante zum Kopieren (`https://shop.de/products/…?ab_force=key:b`)
+- **Experiments** (pro Shop und global): Spalten **Experiment · Status · Runtime · Conversions · Result**; der Shop
+  steht als Unterzeile in der Experiment-Zelle, nicht in einer eigenen Spalte. Toolbar sind **Status-Tabs mit Zählern**
+  (All · Running · Paused · Draft · Ended) **und eine Suche** – keine Filter-Chips, kein Spalten-Dropdown. Sortierung
+  Running → Paused → Draft → Ended, Zeilenklick öffnet Results. **Result** ist der Fortschritt der Stopp-Regel am
+  schwächeren Arm plus „est. &lt;Datum&gt;" (ADR-0036), danach das Urteil („B wins", „No clear difference", „B shipped",
+  „Control kept"); SRM steht nur dort („Assignment broken" + „No verdict"), bei `PAUSED` Fortschritt plus „not
+  collecting while paused", bei DRAFT und ENDED kein Fortschritt. Der Balken ist **neutral grau**, nie emerald –
+  Farbe ist ein Urteil (DESIGN.md §7/§10, ADR-0037). Eine Zeile mit **erfüllter** Stopp-Regel braucht für ihr Urteil
+  die volle Aggregation (höchstens zwölf je Seite), alles andere läuft über `listCounts()` – eine Abfrage für alle
+  Zeilen, dieselben Zählregeln wie 4.8
+- **Experiment erstellen** – ein Formular, zwei Spalten:
+  - Links *Basics* (name, key klein darunter, hypothesis – **nicht Pflicht**, Disziplin statt Validierung –, dazu die
+    **Primärmetrik als Drei-Werte-Select `CR | RPV | AOV`**). Eine Karte *Goals* mit „Primary" und „Also measured"
+    gibt es **nicht**: Custom Goals sind Phase 2 (§9), und eine Karte „Goals" mit einem einzigen Select würde ein
+    Feature versprechen, das es nicht gibt
+  - Links *Where it runs*: URL-Regel (exact/contains/regex), Device-Auswahl, Trigger als **Radios** (immediate /
+    visible + Selektorfeld), hideUntilApplied
+  - Links *Variants*: Anteil im Test (Allocation), Splits/Weights, **pro Variante zwei getrennte CodeMirror-6-Editoren
+    JS und CSS untereinander** (Syntax-Highlighting, Zeilennummern, Dark/Light nach Theme), keine Tabs; Control hat
+    keine Felder
+  - Rechts sticky **eine** Karte „When is it decided?" mit genau **zwei** Eingaben: „Conversions per variant"
+    (= `minConversionsPerArm`) mit dem daraus **abgeleiteten** „≈ 12,5 % detectable lift" daneben, und „Minimum
+    runtime [n] full weeks" (das UI schreibt `minDurationDays = 7·n` und `requireFullWeeks = true`). Darüber die
+    Baseline-CR mit ihrer Quelle, darunter die Laufzeit-Prognose. `requireFullWeeks` ist im UI nicht mehr
+    abschaltbar, das Feld im Modell bleibt (ADR-0036). Bei `RUNNING` nur verschärfbar (4.6)
+  - **Sample-Size-Rechner einwegs**: Conversions pro Arm sind die Eingabe, der MDE ist die abgeleitete Anzeige. Für
+    RPV getrennt ausgewiesen. Baseline-CR auf drei Wegen: (1) aus einem früheren Experiment desselben Shops, falls vorhanden – dann exakt und ohne Eingabe; (2) du trägst die Besucherzahl der letzten 30 Tage ein, die Orders holen wir selbst (`rpvPlanningInputs`); (3) manueller Override der Baseline-CR. AOV und dessen Streuung kommen immer aus unseren eigenen Orders
+  - **Laufzeit-Prognose** beim Anlegen, **mit beschrifteter Quelle**: „at the pace of your last test in this shop" –
+    bei anderem Targeting stimmt sie nicht, und eine unbeschriftete Zahl täuscht Exaktheit vor. Über 6 Wochen als
+    Warnung (Futility, ADR-0036), mit dem Hinweis, die Conversions-Schwelle zu senken. Beim ersten Test eines Shops
+    fehlt das Tempo – dann wird die Baseline eingegeben statt geraten
+  - **AOV als Primärmetrik** erzeugt die Warnung aus 4.8
+  - Unsaved-Bar, Inline-Validierung (Weights = 1.0, key unique, Regex kompiliert) – mit `noValidate`, sonst schluckt
+    die native Browser-Validierung die eigene. Das Formular endet mit **„Save as draft"**; **Start liegt auf der
+    Detailseite**
+  - **Kein QA-Bereich im DRAFT.** Force-Links (4.4) wirken nur auf Experimente im Metafield, dort stehen nur
+    `RUNNING` (4.2) – ein DRAFT ist nicht per `?ab_force` prüfbar. Force-Links erscheinen deshalb erst bei
+    `RUNNING`/`PAUSED` auf der Detailseite. Ein eigener QA-Status ist offen (STATUS.md) und bräuchte einen neuen,
+    additiven Vertrag
+- **Experiment-Detailseite** (klein, **nicht** Results): Start/Pause, Setup, Force-Links, History. **Der Stop-Dialog
+  gehört zu 5b** – bis dahin läuft Stop über die Service-Schicht (`pnpm experiment:status`), ab 5c über die CLI
+- **Editing-Regel nach 4.6** inkl. Warnung, AuditLog und Report-Marker bei `RUNNING`. Beim Vergleich werden beide
+  Seiten normalisiert (ein `targeting` aus älterer Schreibweise sah sonst nach einer Änderung aus und sperrte den
+  Hotfix), und die Stopp-Regel wird **vor** allem anderen geprüft, damit eine Ablehnung nicht halb gespeichert hat
 - **Audit Log** pro Experiment · **Reconciliation**: Tabelle der täglichen Läufe pro Shop (Daten ab WP6)
 - **Glossar-Modul** (`app/lib/glossary.ts`): eine Definition pro Begriff, jeder Tooltip referenziert sie per Key. Kein
   Tooltip-Text steht direkt im JSX – sonst driften dieselben Begriffe zwischen den Seiten auseinander. Tooltip-Rezept
-  aus DESIGN.md §506.
+  aus DESIGN.md §7 „Tooltip (gestyltes Popover)"
+- **Werkzeuge im Repo**: `pnpm seed:demo` (Demo-Shops/-Experimente) und `pnpm screenshots <ordner>` (Abnahme-Screens
+  jeder Seite in beiden Themes); beide laufen nur gegen `localhost` (`scripts/local-only.ts`)
 
 #### 5b – Results-Seite (fünf Tabs)
 
@@ -984,20 +1028,62 @@ mit Umschalter **Daily / Cumulative**. Filterleiste: Datums-Range (Explore, ADR-
 - DESIGN.md-Bausteine werden **über ihre Abschnittsnamen** referenziert, nie über Zeilennummern: Segmented Tabs ·
   DateRange-/Dropdown-Trigger · Tooltip · Accordion/Chevron · Chart-Tooltip und Legende · Content-Regeln (§10)
 
-**Vor 5b zu klären** (Stand 27.09., ADR-0037 ist die Historie):
-- ~~Designsystem~~ **entschieden**: Der Lab-Look steckt seit 27.09. in den Theme-Tokens von DESIGN.md §2
-  (Slate-Flächen, Emerald als einziger Akzent, invertierter Primary, Geist). DESIGN.md gilt damit unverändert;
-  `slate-*`/`emerald-*` bleiben nach §9 aus den Klassennamen heraus, die Werte stecken nur im Theme
-- ~~Tabs-Variante~~ **entschieden**: Underline-Tabs, Rezept steht in DESIGN.md §7 und nennt die Results-Tabs
-  ausdrücklich. Zähler neutral grau, nie farbig
-- **Offen – fehlende DESIGN.md-Rezepte**: **Donut** (§1 erlaubt ihn, ein Rezept fehlt) und ein **gestyltes
-  Tooltip-Popover**; der bestehende Eintrag setzt auf das native `title`, das sich nicht stylen lässt, verzögert
-  erscheint und auf Touch nicht funktioniert. Die Results-Seite trägt nach §10 rund zehn Tooltips aus dem Glossar –
-  ohne Popover nicht umsetzbar. Beide gehören nach DESIGN.md, **bevor** 5b gebaut wird
-- **Offen – noch nicht designt**: volle Verdict-Karte nach erfüllter Stopp-Regel, Leer- und „too few"-Zustände
-- **Offen – Widerspruch im Entwurf**: Die Statuszeile zeigt „40 % of 12.000 visitors per arm", also die abgelöste
-  visitor-basierte `plannedSampleSize`. Sie muss den Status der drei Bedingungen aus ADR-0036 plus `evaluableOn`
-  zeigen. Hier zieht das Design nach, nicht die Regel
+**Stand der Vorklärung (02.10.) – 5b ist nicht mehr blockiert.**
+- ~~Designsystem~~ **entschieden** (27.09.): Der Lab-Look steckt in den Theme-Tokens von DESIGN.md §2. `slate-*` /
+  `emerald-*` bleiben nach §9 aus den Klassennamen heraus, die Werte stecken nur im Theme; zwei Tests halten das
+  (`app/design-system.test.ts`)
+- ~~Tabs-Variante~~ **entschieden** (27.09.): Underline-Tabs, Rezept in DESIGN.md §7, Zähler neutral grau
+- ~~Fehlende Rezepte Donut und Tooltip-Popover~~ **erledigt** (01.10.): beide stehen in DESIGN.md §7, dazu ein
+  **Modal-Rezept**. Im Donut sind **Prozent in der Legende** sichtbar, die **Gesamtzahl in der Mitte**, Hover/Tap
+  zeigt dort die absolute Zahl des Segments; Grau (`#64748b`) ist als **fünfte Chart-Farbe** nur für Other/Unknown
+  reserviert, weil Grün und Rot Urteilsfarben sind
+- ~~Widerspruch Statuszeile~~ **erledigt** (01.10.): Die Zeile zeigt die drei Bedingungen aus ADR-0036, der
+  Fortschrittsbalken ist **neutral**, und aus „Verdict est." wurde **„Evaluable on &lt;Datum&gt;"**; mobil steht das
+  als eigene letzte Zeile. Die Planwerte (Baseline, MDE, α, Power) stehen als letzte Zeile im rich Tooltip-Popover
+- ~~Volle Verdict-Karte, Leerzustände~~ **gezeichnet** (01.10.): die sieben Overview-Zustände unten
+- **Offen, aber nicht blockierend:** der **„too few"-Zustand** in den Segmenttabellen (Strich mit Tooltip, 4.10) ist
+  nicht gezeichnet. Entschieden (Joel, 02.10.): **der Entwickler baut ihn, wie er es für richtig hält**, aus den
+  §2-Tokens und nach §10
+
+**Sieben Overview-Zustände** (Figma „Results", 01.10.), alle durchgezeichnet, Mobile inklusive:
+`a-running-not-conclusive` · `b-rule-met-winner` · `c-rule-met-no-difference` · `d-srm-alarm` ·
+`e-guardrail-warning` · `f-ended-frozen` · `g-draft-zero-data`. Damit sind die in v4.3 offenen Leer- und
+„too few"-Zustände bis auf den einen Punkt oben erledigt.
+
+**SRM schaltet das Urteil ab** (Joel, 02.10. – **braucht ein ADR**, geht über „Badge in den Checks" hinaus):
+- Bei SRM p < 0,001 steht ein **großer Alert über der Performance-Tabelle**
+- Die **Tabelle bleibt vollständig und wird nicht ausgegraut** – alle Zahlen, Lifts und Charts wie sonst. Figmas
+  „debugging only"-Dimmung wird **nicht** gebaut
+- **p-Wert, Winner-Badge und `significant` verschwinden**, solange SRM schlägt: bei kaputtem Split sind die Gruppen
+  nicht vergleichbar, der p-Wert misst dann den Bug. Das gehört in die **Service-Schicht**, nicht ins JSX, damit
+  Dashboard, CLI und `ExperimentResult` dasselbe sagen. Mit Test
+- Die Checks-Liste unter der Tabelle bleibt wie gehabt
+- Stop heißt in diesem Zustand „Stop as invalid…" und schlägt `decision = INVALID` vor
+
+**`g-draft-zero-data`**: „Before you start"-Checkliste (Hypothesis · Variant B code · Stopping rule · QA on the live
+store), leere Performance, als einzige Primäraktion „Start…". **Achtung:** Der QA-Punkt kann in Phase 1 **nicht** auf
+Force-Links zeigen – 4.4 wirkt nur auf Experimente im Metafield, dort stehen nur `RUNNING` (4.2). Entweder bleibt die
+Zeile ein reiner Haken ohne Link, oder der QA-Status wird vorher entschieden (siehe WP5a und STATUS.md)
+
+**Dialoge** (Modal-Rezept DESIGN.md §7, gezeichnet 01.10.): Start · Pause · Stop-with-verdict · **Stop-early**.
+- Breiten 480 px (Bestätigung) bzw. 560 px (mit Formular), höchstens Viewport − 64, nur der Body scrollt, Scrim über
+  das Token `scrim`, Schatten `shadow-xl`
+- **Unter 640 px ist jedes Modal ein Bottom Sheet**, nicht nur Stop-early
+- Scrim-Klick schließt **nicht**, sobald ein Feld Eingaben hat. Im Busy-Zustand: Spinner, alles gesperrt, Escape
+  wirkungslos
+- **Stop-early warnt, blockiert nie und bietet aktiv Pause an** – das Angebot ist neu gegenüber v4.3
+- `decision` ist eine Gruppe **RadioCards** (jede Option mit Erklärung, nicht erlaubte bleiben sichtbar-disabled),
+  nicht das in v4.3 genannte Select. Fachlich unverändert: `decision` Pflicht, vier Werte
+
+**Charts stehen per Default auf Cumulative** (Joel, 02.10.). Vertrag 4.9 schreibt das ausdrücklich nur für
+Improvement; die Begründung dort („Tageswerte sind früh fast nur Rauschen") gilt für alle vier gleichermaßen. Das ist
+ein **UI-Default**, kein Eingriff in 4.9 – Rechenweg und Semantik (kumulierte Zähler und Nenner, nie Mittel der
+Tageswerte) bleiben unverändert, Daily ist einen Klick entfernt. Zusätzlich erscheint der **Marker für Code-Edits an
+einem laufenden Experiment im Chart** (4.6), nicht nur in den Checks.
+
+**Blockreihenfolge bestätigt** (ADR-0037): performance → verdict-status/card → checks + distribution → setup +
+history. Die Performance-Tabelle scrollt horizontal im eigenen Container mit **sticky Variant-Spalte**. Die Checks
+sind benannt: Assignment (SRM) · Guardrail · Bot traffic · Code edits while running · Tainted days.
 
 #### 5c – API + CLI
 
@@ -1031,9 +1117,9 @@ mit Umschalter **Daily / Cumulative**. Filterleiste: Datums-Range (Explore, ADR-
 - Dark- und Light-Theme, Mobile-Breite ohne horizontales Scrollen, keine Verstöße gegen DESIGN.md §9
 
 **Session-Prompts (EN)** – drei Sessions:
-> **5a** Read CLAUDE.md, docs/plan.md (4.6, WP5a) and docs/DESIGN.md in full. Build the dashboard pages Shops, Users, Experiments list and Experiment create/edit using only the components and recipes from DESIGN.md (no other UI libraries; CodeMirror 6 is the single allowed exception, for the JS and CSS fields). Implement the editing rule from contract 4.6 including the running-experiment warning, AuditLog entries and the report marker. Include the sample-size calculator in the form. Add the glossary module: one definition per term, every tooltip referencing it by key, no tooltip string inline in JSX. All UI text in English.
+> **5a** *(erledigt am 02.10. – der Prompt steht hier als Beleg, was beauftragt war; was gebaut wurde, steht in §5a und in STATUS.md.)* Read CLAUDE.md, docs/plan.md (4.6, WP5a) and docs/DESIGN.md in full. Build the dashboard pages Shops, Users, Experiments list and Experiment create/edit using only the components and recipes from DESIGN.md (no other UI libraries; CodeMirror 6 is the single allowed exception, for the JS and CSS fields). Implement the editing rule from contract 4.6 including the running-experiment warning, AuditLog entries and the report marker. Include the sample-size calculator in the form. Add the glossary module: one definition per term, every tooltip referencing it by key, no tooltip string inline in JSX. All UI text in English.
 
-> **5b** Read CLAUDE.md, docs/plan.md contracts 4.8, 4.9, 4.10 and WP5b, docs/DESIGN.md in full – especially §10 Content rules – and ADR-0025, ADR-0026, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037. Build the Results page as five tabs (Overview, Goals, Devices, Visitors, Channels) with a persistent header carrying the status, runtime and the Start/Pause/Stop actions on every tab. Overview holds the verdict and has no filters at all. The Goals tab has one collapsible card per goal with the four charts of contract 4.9 and a daily/cumulative toggle; p-values appear only on the primary metric and only once the stopping rule of ADR-0036 is met. Render the stopping rule per ADR-0037 as a narrow status line under the performance table – not a card – carrying the status of all three conditions and the projected `Evaluable on` date, with the planning values in a tooltip and progress measured on the smaller arm. Overview carries one full table across all goals; the Goals tab has charts only. Before the rule is met there is no CI column at all and lifts stay neutral grey. Do not poll: load on open, reload on tab focus, refresh button with "Updated n s ago". Make the stop dialog warn – without blocking – when the rule is not met yet, explaining that Pause stops serving while Stop freezes the result for good. Devices, Visitors and Channels are identical in structure per contract 4.10 – donut, daily performance chart, performance table – and never show a p-value, CI or winner; the improvement badge appears only from 100 visitors and 25 conversions per arm. Implement the explore mode exactly as ADR-0034 requires. Stopping freezes an ExperimentResult snapshot in the same transaction that sets ENDED, and ended experiments render from the snapshot only. Charts and segment tables load deferred through resource routes. Every explained term uses the glossary module from 5a. All UI text in English.
+> **5b** Read CLAUDE.md, docs/rahmen.md, docs/STATUS.md, docs/plan.md contracts 4.8, 4.9, 4.10 and §5b, docs/DESIGN.md in full – especially §7 Donut, Modal and Tooltip and §10 Content rules – and ADR-0025, ADR-0026, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037, ADR-0038. Build the Results page as five tabs (Overview, Goals, Devices, Visitors, Channels) under `/dashboard/s/:shop/experiments/:key`, with a persistent header carrying the status, runtime and the Start/Pause/Stop actions on every tab. Overview holds the verdict and has no filters at all. Build the seven Overview states a–g that Figma draws; the only one not drawn is the "too few" cell of contract 4.10 – build it from the §2 tokens as you see fit. The Goals tab has one collapsible card per goal with the four charts of contract 4.9 and a daily/cumulative toggle that **starts on cumulative** – a UI default, the computation of 4.9 is unchanged. Render the stopping rule per ADR-0037 as a narrow status line under the performance table – not a card – carrying the status of all three conditions of ADR-0036 and the projected `Evaluable on <date>`, with the planning values as the last line of the rich tooltip popover and progress measured on the smaller arm; the progress bar is **neutral grey, never emerald** – colour is a verdict. Overview carries one full table across all goals; the Goals tab has charts only. Before the rule is met there is no CI column at all and lifts stay neutral grey. On SRM (p < 0.001) put a large alert above the performance table, keep the table complete and **not dimmed**, and drop the p-value, the winner badge and `significant` for as long as SRM fires – in the service layer, so dashboard, CLI and snapshot agree, with a test and an ADR. Do not poll: load on open, reload on tab focus, refresh button with "Updated n s ago". The four dialogs follow the Modal recipe in DESIGN.md §7: `decision` is a group of RadioCards, every modal is a bottom sheet below 640 px, and stop-early warns, never blocks, and actively offers Pause instead, explaining that Pause stops serving while Stop freezes the result for good. Devices, Visitors and Channels are identical in structure per contract 4.10 – donut, daily performance chart, performance table – and never show a p-value, CI or winner; the improvement badge appears only from 100 visitors and 25 conversions per arm. Implement the explore mode exactly as ADR-0034 requires. Stopping freezes an ExperimentResult snapshot in the same transaction that sets ENDED, and ended experiments render from the snapshot only. Charts and segment tables load deferred through resource routes. Every explained term uses the glossary module from 5a. All UI text in English, numbers and currency de-DE.
 
 > **5c** Read docs/plan.md 4.7 and WP5c. Implement the bearer-token JSON API (tokens generated per user in the dashboard, stored as hashes, expiring after 90 days, shop-scoped routes) and the sh-ab CLI in lib/cli. The CLI must use exactly the same service layer as the dashboard – no duplicated business logic. `push` on a RUNNING experiment requires `--force` and produces the same AuditLog entry as a UI edit.
 

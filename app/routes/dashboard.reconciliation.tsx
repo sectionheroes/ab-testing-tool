@@ -1,18 +1,13 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { requireInternal } from "../services/auth.server";
-import { PageHeader } from "../components/PageHeader";
-import { EmptyState } from "../components/Shell";
+import { RememberedShopRedirect } from "../components/RememberedShopRedirect";
 
+// ADR-0038: the shop-scoped route is /dashboard/s/:shop/reconciliation.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireInternal(request);
   return null;
 };
 
-export default function ReconciliationPage() {
-  return (
-    <>
-      <PageHeader title="Reconciliation" />
-      <EmptyState title="Nothing here yet">This page is built in a later work package.</EmptyState>
-    </>
-  );
+export default function LegacyReconciliation() {
+  return <RememberedShopRedirect section="reconciliation" />;
 }

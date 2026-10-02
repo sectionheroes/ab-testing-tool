@@ -97,6 +97,9 @@
   --sh-nav-active: #1c1b1b;                                      /* Text aktiver Nav-Eintrag */
   --sh-nav-active-bg: color-mix(in oklab, #1c1b1b 10%, transparent);
   --sh-nav-active-line: transparent;                             /* 2px-Linie links */
+  --sh-scrim: rgb(28 27 27 / 0.45);                              /* Fläche hinter jedem Modal */
+  --sh-control-checked: #1c1b1b;                                 /* gesetzte Checkbox / gesetztes Radio */
+  --sh-control-checked-content: #ffffff;
 }
 [data-theme="dark"] {
   --sh-border-strong: #475569;                                   /* slate-600 */
@@ -107,6 +110,9 @@
   --sh-nav-active: #34d399;                                      /* emerald-400 */
   --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent); /* emerald-950/50 */
   --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent); /* emerald-500/60 */
+  --sh-scrim: rgb(2 6 23 / 0.72);                                /* slate-950 @ 72 % */
+  --sh-control-checked: #f8fafc;                                 /* = primary im Dark */
+  --sh-control-checked-content: #0f172a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -118,6 +124,9 @@
     --sh-nav-active: #34d399;
     --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent);
     --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent);
+    --sh-scrim: rgb(2 6 23 / 0.72);
+    --sh-control-checked: #f8fafc;
+    --sh-control-checked-content: #0f172a;
   }
 }
 
@@ -132,6 +141,9 @@
   --color-nav-active: var(--sh-nav-active);
   --color-nav-active-bg: var(--sh-nav-active-bg);
   --color-nav-active-line: var(--sh-nav-active-line);
+  --color-scrim: var(--sh-scrim);
+  --color-control-checked: var(--sh-control-checked);
+  --color-control-checked-content: var(--sh-control-checked-content);
 }
 
 @layer base {

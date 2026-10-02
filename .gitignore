@@ -28,3 +28,4 @@ coverage/
 .shopify.lock
 *.sqlite
 *.sqlite-journal
+.scratch/

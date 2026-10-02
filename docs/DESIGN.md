@@ -13,9 +13,10 @@ Datei die Rezepte **Segmented Tabs**, **DateRange-/Dropdown-Trigger**, **Tooltip
 > **Verweise immer über den Abschnittsnamen, nie über eine Zeilennummer.** Frühere Angaben wie „§390" oder „§506"
 > waren Zeilennummern und sind mit jeder Ergänzung verrutscht.
 >
-> **Ein Rezept fehlt weiterhin und wird für WP5b gebraucht** (ADR-0037):
-> **Donut** – §1 erlaubt ihn, ein Rezept gibt es nicht. Gebraucht für Device- und Channel-Distribution. Er steht
-> **nicht in Figma**; er muss erst entworfen werden, bevor er hier beschrieben werden kann.
+> Erledigt am 01.10. (Design-Session für WP5b): **Donut** und **Modal** haben Rezepte in §7, beide als Komponenten auf
+> Figma „Foundations“ (Section „Lab components · Charts & overlays“). Neu dafür: das Token `scrim` (§2-Tabelle) und
+> Grau als fünfte Chart-Farbe (§4). Tooltip-Popover, Checkbox, Radio, Input und MobileTopBar sind vom Designer
+> bestätigt bzw. korrigiert (jeweils im Abschnitt).
 >
 > Erledigt am 27.09.: Der Lab-Look steckt in den Theme-Tokens (§2), die Underline-Tabs haben ein Rezept (§7).
 > Erledigt am 01.10. (WP5a): Das **gestylte Tooltip-Popover** steht in §7 und ersetzt das native `title` – das ließ
@@ -70,6 +71,11 @@ ihn gibt; die in WP5a dazugekommenen sind im Light Mode **provisorisch und nicht
 | `danger-solid-content` *(neu 01.10.)* | `#ffffff` | `#ffffff` | Schrift darauf |
 | `success-solid` *(neu 01.10.)* | `#10b981` emerald-500 | `#23884a` | Der **gefüllte** Progress-Balken. Bei voller Deckkraft ist der Unterschied zu `success` (emerald-400) sichtbar, bei 20 % nicht – deshalb nur hier ein eigener Wert |
 | `nav-active` / `-bg` / `-line` | Emerald-Satz | alter Look | Aktiver Nav-Eintrag (§6) |
+| `scrim` *(neu 01.10.)* | `rgb(2 6 23 / 0.72)` slate-950 @ 72 % | `rgb(28 27 27 / 0.45)` | Fläche hinter jedem Modal (§7 „Modal"). Dunkelt in **beiden** Themes ab – `bg-base-100/70` würde im Light Mode aufhellen, `bg-black` verbietet §9 |
+| `control-checked` / `-content` *(neu 01.10.)* | `#f8fafc` / `#0f172a` (= primary) | `#1c1b1b` / `#ffffff` | Fläche/Haken einer **gesetzten** Checkbox und Ring/Punkt eines gesetzten Radios. Im Light Mode ist Primary Mint, und Mint auf Weiß ist als „an" kaum von „aus" zu unterscheiden |
+
+> Beide stehen seit 02.10. als `--sh-scrim` / `--sh-control-checked*` im §2-CSS-Block **und** in `app/app.css`,
+> samt `@theme`-Zeile – `app/design-system.test.ts` hält beide byte-gleich.
 
 **`--color-info` ist im Dark Mode seit 01.10. Sky statt Lila** (`#7dd3fc`, Fläche `bg-info/20`). Figma nutzt es für
 den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label vorbehalten (§4).
@@ -174,6 +180,9 @@ den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label v
   --sh-nav-active: #1c1b1b;                                      /* Text aktiver Nav-Eintrag */
   --sh-nav-active-bg: color-mix(in oklab, #1c1b1b 10%, transparent);
   --sh-nav-active-line: transparent;                             /* 2px-Linie links */
+  --sh-scrim: rgb(28 27 27 / 0.45);                              /* Fläche hinter jedem Modal */
+  --sh-control-checked: #1c1b1b;                                 /* gesetzte Checkbox / gesetztes Radio */
+  --sh-control-checked-content: #ffffff;
 }
 [data-theme="dark"] {
   --sh-border-strong: #475569;                                   /* slate-600 */
@@ -184,6 +193,9 @@ den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label v
   --sh-nav-active: #34d399;                                      /* emerald-400 */
   --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent); /* emerald-950/50 */
   --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent); /* emerald-500/60 */
+  --sh-scrim: rgb(2 6 23 / 0.72);                                /* slate-950 @ 72 % */
+  --sh-control-checked: #f8fafc;                                 /* = primary im Dark */
+  --sh-control-checked-content: #0f172a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -195,6 +207,9 @@ den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label v
     --sh-nav-active: #34d399;
     --sh-nav-active-bg: color-mix(in oklab, #022c22 50%, transparent);
     --sh-nav-active-line: color-mix(in oklab, #10b981 60%, transparent);
+    --sh-scrim: rgb(2 6 23 / 0.72);
+    --sh-control-checked: #f8fafc;
+    --sh-control-checked-content: #0f172a;
   }
 }
 
@@ -209,6 +224,9 @@ den „ended"-Badge; Lila bleibt `secondary` und damit dem Plan-/Feature-Label v
   --color-nav-active: var(--sh-nav-active);
   --color-nav-active-bg: var(--sh-nav-active-bg);
   --color-nav-active-line: var(--sh-nav-active-line);
+  --color-scrim: var(--sh-scrim);
+  --color-control-checked: var(--sh-control-checked);
+  --color-control-checked-content: var(--sh-control-checked-content);
 }
 
 @layer base {
@@ -351,8 +369,13 @@ schon passend gesetzt. Einfach `badge-soft badge-success` etc. nutzen.
 Chart-Farben (hart, in beiden Modes gleich):
 
 ```js
-const C = { green: "#22c55e", red: "#ef4444", purple: "#8b7bf0", blue: "#60a5fa", amber: "#e0a34a", teal: "#2dd4bf" };
+const C = { green: "#22c55e", red: "#ef4444", purple: "#8b7bf0", blue: "#60a5fa", amber: "#e0a34a", teal: "#2dd4bf", gray: "#64748b" };
 ```
+
+- **Grün und Rot tragen ein Urteil** (besser/schlechter) und kommen deshalb nur in Charts vor, die eines zeigen dürfen –
+  nie in Verteilungen. Kategorien bekommen der Reihe nach **blue · purple · teal · amber**.
+- **`gray` (neu 01.10.)** ist reserviert für „Other · n groups" und „Unknown" – alles, was keine echte Kategorie ist.
+  Ein neutraler Theme-Ton (`base-content/30`) ginge nicht: Chart-Farben müssen in beiden Themes gleich bleiben.
 
 Logo: Sectionheroes-Logo als weißes PNG existiert nur für Dark. Für Light eine dunkle Variante
 hinterlegen und per `[data-theme=light]` / `dark:`-Äquivalent tauschen (z. B. zwei `<img>` mit
@@ -368,7 +391,7 @@ hinterlegen und per `[data-theme=light]` / `dark:`-Äquivalent tauschen (z. B. z
 - Schrift: Geist (`font-sans`); Keys, IDs, Datumswerte, E-Mail-Adressen in `font-mono` (Geist Mono).
 - Radius: Inputs/Buttons `rounded-lg` (8px), aktiver Nav-Eintrag `rounded-r-lg` (links eckig, an der Linie),
   Tabs innen `rounded-md`, Cards/Tabellen/Dropdowns `rounded-box` (12px), Badges `rounded-full` (Pill).
-- Schatten nur für schwebende Elemente: Dropdowns `shadow-lg`, DateRange-Popover `shadow-xl`, Tooltip-Popover `shadow-lg`. Cards **kein** Schatten, nur `border border-base-300`.
+- Schatten nur für schwebende Elemente: Dropdowns `shadow-lg`, DateRange-Popover `shadow-xl`, Tooltip-Popover `shadow-lg`, Modal `shadow-xl` (plus Scrim, §7 „Modal"). Cards **kein** Schatten, nur `border border-base-300`.
 - Content-Padding: `main` = `px-10 py-8`. Cards `p-4` (Dashboard) bzw. `p-5` (Formulare). Grid-Gaps `gap-4`.
 - Transitions: `transition-colors` auf allem Klickbaren.
 
@@ -598,8 +621,21 @@ Größen: `sm` = `px-3 py-[7px] text-[13px]` (Icon 14px) · `md` = `px-4 py-[9px
 - Textlink: `hover:underline`; Löschen-X in Listen: `text-base-content/30 hover:text-error`.
 
 ### Tooltip (gestyltes Popover)
-**Komponente: `app/components/Tooltip.tsx`** (Figma `TooltipTrigger` 109:159 – **nur der Trigger**; das Popover ist
-hier entworfen und vom Designer noch zu bestätigen).
+**Komponente: `app/components/Tooltip.tsx`** (Figma `TooltipTrigger` 109:159 und **`Tooltip/Popover`** mit
+`kind=simple|rich`, seit 01.10. auf Foundations). **Vom Designer bestätigt (01.10.):** Fläche `base-300` mit Rand
+`base-400` bleibt – das Popover öffnet über Cards (`base-200`) und muss eine Stufe darüber liegen. Figma hatte für den
+Stopp-Regel-Tooltip noch `base-200` gezeichnet; das ist jetzt an den Code angeglichen.
+
+**Zweite Variante `rich`** – nur für den Stopp-Regel-Tooltip an „Not yet conclusive": `w-80 p-4`, Titel
+`text-[13px] font-medium text-base-content`, ein Satz Erklärung (`text-xs /80`), die drei Bedingungen untereinander
+(Ring-Icon 14px, Bedingung `text-xs`, Stand darunter `text-xs /60`), Trenner `border-base-400`, letzte Zeile die
+**Planwerte** `text-[11px] /50` („Planned for a lift of about 12,4 % on a 2,4 % baseline · α 0,05 · power 80 %").
+Das ist der Ort, an den ADR-0037 die Planwerte schickt. Der Inhalt kommt weiter aus dem Glossar plus den
+`evaluate()`-Zahlen; `text` nimmt dafür einen `ReactNode`.
+
+**Korrektur am Beispieltext im Styleguide:** „Converting visitors. A visitor with three orders converts once
+(contract 4.8)." – „contract 4.8" ist interner Jargon und hat in einem Glossartext nichts zu suchen (§10). Vorschlag:
+„Visitors who bought at least once. A visitor with three orders counts as one conversion."
 
 Ersetzt das frühere `title`-Attribut: das ließ sich nicht stylen, erschien verzögert und funktionierte auf Touch gar
 nicht. Die Results-Seite trägt nach §10 rund zehn Glossar-Tooltips – ohne Popover nicht umsetzbar.
@@ -652,10 +688,28 @@ Die Favicon-Farbe wird aus der Domain abgeleitet, nicht gespeichert – eine `Sh
 wäre die falsche Art von dauerhaft.
 
 ### Formularfelder (Checkbox · Radio · Input)
-**Komponente: `app/components/Form.tsx`** (Figma 8:94 · 8:102 · 8:123). Diese drei sind in Figma als **veraltet**
-markiert und deshalb **nicht** abgezeichnet, sondern aus dem aktuellen Token-Satz gebaut – vom Designer zu bestätigen.
+**Komponente: `app/components/Form.tsx`** (Figma 8:94 · 8:102 · 8:123). **Vom Designer geprüft (01.10.)** – in Figma
+nicht mehr „veraltet", sondern aktuell (Beschreibung an den Komponenten). Die zwei Korrekturen sind seit 02.10. im
+Code:
+
+- **Input liegt vertieft**: `bg-base-100` statt `bg-base-200`. Auf einer Card (`base-200`) verschwindet ein
+  `base-200`-Feld sonst bis auf den Rand; alle Formulare in Figma (Experiment form, Stop-Dialog) zeichnen es so.
+  Rand `border-base-content/20` (≈ `border-strong`, darf so bleiben), Höhe **40 px** (`md`, `h-10`) bzw. 32 px
+  (`sm`, `h-8`). Dasselbe gilt für **Textarea** und **Select**; die Textarea wächst mit dem Inhalt und hat deshalb
+  keine feste Höhe.
+- **Gesetzte Checkbox / gesetztes Radio** über das Token `control-checked` (§2) statt `primary`. Im Dark Mode
+  ändert sich nichts (= primary); im Light Mode ist Mint-auf-Weiß als „an" kaum von „aus" zu unterscheiden.
+- Checkbox, Radio und `locked` stimmen sonst mit Figma überein.
+
 `locked` ist der Zustand aus Vertrag 4.6 (Targeting, Allocation, Weights, Salt bei `RUNNING` gesperrt): gerendert als
 disabled mit Schloss und Erklärung. Die eigentliche Sperre liegt im Service-Layer, nicht in einer CSS-Klasse.
+
+**Fehlertexte für Laien:** Allocation ist im UI ein Prozentwert, der Text muss es auch sein („… has to be between
+1 and 100 %"), Zahlen in Feldern `de-DE` („1.000", nicht „1000"). Beides ist im Styleguide korrigiert.
+
+**MobileTopBar** (Figma 8:249, bestätigt 01.10., im Code seit 02.10.): Logo + Wortmarke links, Menü-Button rechts,
+**kein Seitentitel** – der steht direkt darunter im Page-Header. `h-14 border-b border-base-300 bg-base-100 px-4`,
+die Wortmarke kommt als `Wordmark` aus `Shell.tsx`, damit Sidebar und Mobile-Bar nicht auseinanderlaufen.
 
 ### Icons
 **`app/components/icons.tsx`** – 36 Icons, Inline-SVG, 24er-Viewbox, `stroke="currentColor"`, `strokeWidth={2}`,
@@ -760,6 +814,99 @@ Chevron: 16px SVG `m9 6 6 6-6 6`, `shrink-0 text-base-content/40 transition-tran
 - Legende: `flex items-center gap-1.5 text-xs text-base-content/60` mit Punkt `inline-block h-2 w-2 rounded-full` (inline `background`)
 - Achsen-Labels im SVG: `fill-current text-[10px] opacity-50`
 - Area-Fill: Gradient von `stopOpacity 0.28` → `0`, Linie `strokeWidth 1.8`
+
+### Donut (Distribution)
+Figma: `Chart/Donut` (state = default · hover · empty · single), `Chart/LegendItem` (default · active · dimmed),
+`Chart/DonutBlock` (layout = vertical · horizontal, state = default · empty), Spec-Tafel „Donut · spec" auf
+Foundations. Verwendung: Results-Overview dreimal nebeneinander (Device · Visitor type · Channel), je einmal auf den
+Tabs Devices, Visitors, Channels (plan WP5b, Vertrag 4.10).
+
+**Gezeichnet werden Visitors, nie Orders.** Handgeschriebenes SVG (§1), keine Library.
+
+- **Maße:** 104 × 104 px, Ring 14 px (Innenradius 38 von 52), 2° Lücke zwischen Segmenten (in der Kartenfarbe, also
+  einfach ausgelassen), keine Lücke bei nur einem Segment. Start bei 12 Uhr, im Uhrzeigersinn, **größtes Segment
+  zuerst**, „Other" bzw. „Unknown" **immer zuletzt**.
+- **2 bis 5 Segmente.** Channel: Top 4 + „Other · n groups" (volle Liste in der Tabelle, 4.10). Device: mobile ·
+  desktop · tablet, **nie `unknown`** – Visitors sind nie unknown; in der Devices-Tabelle bleibt `unknown` als vierter
+  Bucket. Visitor type: new · returning · unknown (unknown = altes Snippet, das gibt es bei Visitors).
+- **Farben** aus der Chart-Palette (§4), in beiden Themes gleich: der Reihe nach blue · purple · teal · amber, `gray`
+  nur für Other/Unknown. Nie Grün/Rot. Leerer Ring (`empty`): `base-300`.
+- **Sichtbar ist Prozent, nicht die absolute Zahl.** Der Donut beantwortet „wie verteilt sich der Traffic" – das ist
+  eine Anteilsfrage, und die absoluten Zahlen je Segment stehen ohnehin in der Tabelle des jeweiligen Tabs.
+  Prozent als Ganzzahl, nach Largest-Remainder gerundet (die Legende summiert sich immer auf 100), unter 0,5 „<1 %".
+- **Mitte:** die **Gesamtzahl** der Visitors (`text-[15px] font-semibold tabular-nums`, darunter „visitors"
+  `text-[11px] /50`). Sie ist die einzige absolute Zahl am Donut und gibt den Prozenten ihren Maßstab – keine
+  Doppelangabe, weil sie nirgends daneben noch einmal steht.
+- **Hover / Tap** auf ein Segment **oder** eine Legendenzeile: das Segment bleibt voll, die anderen gehen auf 30 %;
+  die Mitte zeigt **die absolute Zahl dieses Segments** und seinen Namen statt der Gesamtzahl; die Legendenzeile wird
+  `font-medium text-base-content`, die anderen `/40`. Das ist das „andere im Hover" aus §10. Tap außerhalb setzt
+  zurück; kein separater Chart-Tooltip.
+- **Legende:** Zeile 20 px + 4 px Abstand, Punkt 8 px, Label `text-xs /80`, Wert rechtsbündig `text-xs tabular-nums
+  /60`.
+- **Block-Abstände** (vertical): Titel (`text-sm font-medium`) → Donut 16 · Donut → Legende 16 · Legende → Link 8;
+  drei Blöcke nebeneinander mit `gap-6`. **horizontal** (mobil und auf den Segment-Tabs): Donut links, rechts Titel,
+  Legende, Link; Abstand 20, Blöcke untereinander mit 24.
+- **Leer** („No data yet"): leerer Ring, „—" in der Mitte, statt der Legende eine Zeile „No data yet"
+  (`text-xs /50`), kein Link.
+- **Ein Segment:** voller Ring ohne Lücke, eine Legendenzeile „100 %" (z. B. Targeting nur Mobile).
+- **Keine Erklärzeile** unter dem Donut (§10). Tooltip am Titel nur bei Visitor type und Channel (Glossar).
+- Zugänglichkeit: `role="img"` mit `aria-label` aus der Legende („Mobile 70 %, Desktop 26 %, Tablet 4 %"); die
+  Legende selbst ist echter Text.
+
+### Modal
+Figma: `Modal/Header`, `Modal/Footer` (layout = inline · stacked, tone = default · destructive, state = idle · busy),
+`Modal/Callout` (neutral · warning), `RadioCard`, `Field/Label`, `Textarea`, `Modal/Handle`, `Modal/Scrim`,
+`Icon/spinner` auf Foundations; Rezept-Tafel „Modal · recipe". Die vier Results-Dialoge (Start · Pause · Stop with
+verdict · Stop early) plus Busy und langer Body sind daraus gebaut (Figma: Results → Dialogs). Später auch „Add goal".
+
+Basis ist das native `<dialog>` mit `showModal()` (Fokusfalle, Escape, Top-Layer, Rest der Seite inert) – keine
+Library (§9). daisyUIs `modal` darf die Hülle stellen (`modal modal-bottom sm:modal-middle`), die Box ist unsere.
+
+```jsx
+<dialog className="modal modal-bottom sm:modal-middle bg-scrim">
+  <div className="modal-box flex max-h-[calc(100vh-64px)] w-full max-w-[480px] flex-col overflow-hidden rounded-box
+                  border border-base-300 bg-base-200 p-0 shadow-xl sm:max-w-[480px]">  {/* md: 560 */}
+    <header className="flex items-center gap-3 px-6 pt-5 pb-1">
+      <h2 className="flex-1 text-base font-semibold">Stop experiment?</h2>
+      <IconButton icon="x" label="Close" />                    {/* weg, solange busy */}
+    </header>
+    <div className="flex-1 space-y-4 overflow-y-auto px-6 pt-3 pb-2">{/* Callout · Felder · Callout */}</div>
+    <footer className="flex justify-end gap-2 px-6 pt-4 pb-5">
+      <Button style="ghost">Cancel</Button>
+      <Button style="danger">Stop and freeze result</Button>
+    </footer>
+  </div>
+</dialog>
+```
+
+- **Breiten:** `sm` 480 px – Bestätigung mit Text und höchstens einem Callout (Start, Pause). `md` 560 px – sobald ein
+  Formular drin ist (Stop with verdict, Stop early, Add goal).
+- **Höhe:** höchstens Viewport − 64 px. Header und Footer bleiben stehen, **nur der Body scrollt**. Die Haarlinien
+  unter dem Header und über dem Footer (`border-base-300`) erscheinen nur, solange es etwas zu scrollen gibt.
+- **Scrim** `bg-scrim` (Token §2, dunkelt in beiden Themes ab). **Schatten `shadow-xl`** auf der Box – dieselbe Stufe
+  wie das DateRange-Popover; die Trennung von der Seite leistet der Scrim, ein noch tieferer Schatten bringt nichts.
+- **Reihenfolge im Body:** Warn-Callout (falls vorhanden) zuerst → Felder → neutraler Konsequenz-Callout (Schloss)
+  zuletzt. Abstand Label → Feld 8, zwischen Blöcken 16.
+- **Formular im Body:** `Field/Label` (`text-sm /80`, „required" `text-xs /40`) über dem Feld. Die Entscheidung im
+  Stop-Dialog ist eine Gruppe **`RadioCard`s**, kein Select – jede Option braucht ihre Erklärzeile, und nicht
+  erlaubte Optionen (Winner vor erfüllter Regel) bleiben **sichtbar, aber disabled**, damit der Grund lesbar ist.
+  `conclusion` ist eine `Textarea` (88 px, wächst bis 6 Zeilen). Beides Pflicht; der Hauptbutton bleibt aktiv und
+  zeigt beim Absenden die Inline-Fehler (§8), statt stumm ausgegraut zu sein.
+- **Aktionen:** Cancel (`ghost`) links neben der Hauptaktion, rechtsbündig. Destruktiv = `danger`-Button, dessen
+  Label die Folge nennt („Stop and freeze result", „Stop anyway").
+- **Zustände:** *Standard* · *mit Warnung* – Warn-Callout oben, **blockiert nie**, darf eine sanftere Alternative als
+  Textaktion anbieten („Pause instead") · *destruktiv* – `danger` als Hauptaktion · *busy* – Spinner (`.app-spinner`)
+  plus „Stopping…", Cancel disabled, ✕ weg, Body `inert` und 60 %, Escape und Scrim-Klick wirkungslos · *Fehler* –
+  `alert-soft alert-error` oben im Body, alles wieder aktiv.
+- **Schließen:** ✕, Escape und Klick auf den Scrim = Cancel. **Ausnahmen:** während busy gar nicht; sobald ein Feld
+  Eingaben hat, nur noch über ✕/Cancel (ein verirrter Klick daneben verwirft sonst die getippte Conclusion).
+- **Fokus:** auf das erste Feld; ohne Feld bei destruktiven Dialogen auf **Cancel**, sonst auf die Hauptaktion. Beim
+  Schließen zurück auf den Auslöser.
+- **Unter 640 px ist jedes Modal ein Bottom Sheet** – nicht nur Stop early. Volle Breite, oben `rounded-t-box`,
+  `Modal/Handle` (36 × 4, Wischen nach unten = Cancel), **kein ✕**, Footer gestapelt (Hauptaktion oben, volle Breite,
+  Cancel darunter), höchstens 90 vh, Body scrollt. Begründung: eine Regel statt einer Ausnahme; die Formulare
+  (Textarea + Tastatur) brauchen die Höhe; Daumen erreichen den unteren Rand, nicht die Mitte; und ein 480er-Modal
+  wäre auf 390 px ohnehin randlos – dann besser gleich als Sheet.
 
 ### Login
 ```jsx
